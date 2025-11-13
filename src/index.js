@@ -648,15 +648,29 @@ webhookApp.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Функція для екранування HTML
+const escapeHtml = (str) => {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+};
+
 // Проміжна сторінка для WayForPay widget (POST форма)
 webhookApp.get('/payment/form/:orderReference', async (req, res) => {
   try {
+    console.log('[payment/form] Request received:', req.params, req.query);
+    
     const { orderReference } = req.params;
     
-    // В реальному проєкті тут потрібно отримати дані платежу з БД або кешу
-    // Для MVP використовуємо дані з сесії або параметрів
+    if (!orderReference) {
+      return res.status(400).send('Missing orderReference');
+    }
     
-    // Отримуємо дані з query параметрів (тимчасове рішення)
+    // Отримуємо дані з query параметрів
     const paymentData = {
       merchantAccount: req.query.merchantAccount || config.payment.wayForPayMerchantAccount,
       merchantDomainName: req.query.merchantDomainName || config.payment.merchantDomainName,
@@ -671,13 +685,20 @@ webhookApp.get('/payment/form/:orderReference', async (req, res) => {
       serviceUrl: req.query.serviceUrl || `${process.env.APP_URL || 'https://your-app.com'}/payment/webhook`,
     };
     
+    console.log('[payment/form] Payment data prepared:', {
+      merchantAccount: paymentData.merchantAccount,
+      orderReference: paymentData.orderReference,
+      amount: paymentData.amount,
+    });
+    
     // Створюємо підпис
     const signature = paymentService.createWayForPaySignature(paymentData, config.payment.wayForPaySecretKey);
     paymentData.merchantSignature = signature;
     
+    console.log('[payment/form] Signature created, generating HTML form...');
+    
     // Генеруємо HTML форму, яка автоматично відправить POST до WayForPay
-    const html = `
-<!DOCTYPE html>
+    const html = `<!DOCTYPE html>
 <html lang="uk">
 <head>
     <meta charset="UTF-8">
@@ -717,18 +738,18 @@ webhookApp.get('/payment/form/:orderReference', async (req, res) => {
         <p>Перенаправлення на сторінку оплати...</p>
     </div>
     <form id="wayforpayForm" method="POST" action="https://secure.wayforpay.com/pay">
-        <input type="hidden" name="merchantAccount" value="${paymentData.merchantAccount}">
-        <input type="hidden" name="merchantDomainName" value="${paymentData.merchantDomainName}">
-        <input type="hidden" name="orderReference" value="${paymentData.orderReference}">
-        <input type="hidden" name="orderDate" value="${paymentData.orderDate}">
-        <input type="hidden" name="amount" value="${paymentData.amount}">
-        <input type="hidden" name="currency" value="${paymentData.currency}">
-        <input type="hidden" name="productName[]" value="${paymentData.productName[0]}">
-        <input type="hidden" name="productCount[]" value="${paymentData.productCount[0]}">
-        <input type="hidden" name="productPrice[]" value="${paymentData.productPrice[0]}">
-        <input type="hidden" name="returnUrl" value="${paymentData.returnUrl}">
-        <input type="hidden" name="serviceUrl" value="${paymentData.serviceUrl}">
-        <input type="hidden" name="merchantSignature" value="${paymentData.merchantSignature}">
+        <input type="hidden" name="merchantAccount" value="${escapeHtml(paymentData.merchantAccount)}">
+        <input type="hidden" name="merchantDomainName" value="${escapeHtml(paymentData.merchantDomainName)}">
+        <input type="hidden" name="orderReference" value="${escapeHtml(paymentData.orderReference)}">
+        <input type="hidden" name="orderDate" value="${escapeHtml(String(paymentData.orderDate))}">
+        <input type="hidden" name="amount" value="${escapeHtml(String(paymentData.amount))}">
+        <input type="hidden" name="currency" value="${escapeHtml(paymentData.currency)}">
+        <input type="hidden" name="productName[]" value="${escapeHtml(paymentData.productName[0])}">
+        <input type="hidden" name="productCount[]" value="${escapeHtml(String(paymentData.productCount[0]))}">
+        <input type="hidden" name="productPrice[]" value="${escapeHtml(String(paymentData.productPrice[0]))}">
+        <input type="hidden" name="returnUrl" value="${escapeHtml(paymentData.returnUrl)}">
+        <input type="hidden" name="serviceUrl" value="${escapeHtml(paymentData.serviceUrl)}">
+        <input type="hidden" name="merchantSignature" value="${escapeHtml(paymentData.merchantSignature)}">
     </form>
     <script>
         // Автоматично відправляємо форму
@@ -737,10 +758,21 @@ webhookApp.get('/payment/form/:orderReference', async (req, res) => {
 </body>
 </html>`;
 
+    console.log('[payment/form] HTML form generated, sending response...');
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(html);
   } catch (error) {
     console.error('[payment/form] Error:', error);
-    res.status(500).send('Помилка створення форми оплати');
+    console.error('[payment/form] Error stack:', error.stack);
+    res.status(500).send(`
+      <html>
+        <head><title>Помилка</title><meta charset="UTF-8"></head>
+        <body style="font-family: Arial, sans-serif; padding: 50px; text-align: center;">
+          <h1>Помилка створення форми оплати</h1>
+          <p>${escapeHtml(error.message)}</p>
+        </body>
+      </html>
+    `);
   }
 });
 
