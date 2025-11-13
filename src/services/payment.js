@@ -50,8 +50,10 @@ export class PaymentService {
 
     try {
       // Викликаємо WayForPay API для створення інвойсу
+      // WayForPay вимагає apiVersion в запиті
       const requestPayload = {
         transactionType: 'CREATE_INVOICE',
+        apiVersion: 1,
         ...requestData,
       };
 
