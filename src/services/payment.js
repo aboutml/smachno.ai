@@ -40,13 +40,21 @@ export class PaymentService {
       console.warn('[WayForPay] MERCHANT_DOMAIN_NAME не налаштовано або використовується значення за замовчуванням');
     }
 
-    // Створюємо підпис для WayForPay
+    // Створюємо підпис для WayForPay (БЕЗ returnUrl та serviceUrl)
     const signature = this.createWayForPaySignature(requestData, config.payment.wayForPaySecretKey);
     requestData.merchantSignature = signature;
     
     console.log('[WayForPay] Merchant Account:', config.payment.wayForPayMerchantAccount);
     console.log('[WayForPay] Merchant Domain:', config.payment.merchantDomainName);
     console.log('[WayForPay] Signature created:', signature.substring(0, 10) + '...');
+    
+    // Альтернативний варіант: використовуємо widget замість API
+    // Якщо API не працює, можна використати цей метод
+    const useWidget = process.env.WAYFORPAY_USE_WIDGET === 'true';
+    
+    if (useWidget) {
+      return this.createPaymentViaWidget(requestData, orderReference, paymentAmount);
+    }
 
     try {
       // Викликаємо WayForPay API для створення інвойсу
@@ -94,8 +102,17 @@ export class PaymentService {
         } else if (response.data.errorCode) {
           console.error('[WayForPay] Error response:', response.data);
           throw new Error(`WayForPay помилка: ${response.data.reason || response.data.errorMessage || 'Невідома помилка'}`);
+        } else if (response.data.reasonCode === 1113) {
+          // Invalid signature - спробуємо використати widget
+          console.warn('[WayForPay] API returned invalid signature, trying widget method...');
+          return this.createPaymentViaWidget(requestData, orderReference, paymentAmount);
         } else {
           console.error('[WayForPay] Unexpected response format:', response.data);
+          // Якщо це помилка підпису, спробуємо widget
+          if (response.data.reasonCode === 1113) {
+            console.warn('[WayForPay] Trying widget method as fallback...');
+            return this.createPaymentViaWidget(requestData, orderReference, paymentAmount);
+          }
           throw new Error(`WayForPay повернув неочікуваний формат відповіді: ${JSON.stringify(response.data)}`);
         }
       }
@@ -116,6 +133,15 @@ export class PaymentService {
         
         // Якщо отримали помилку від API
         if (error.response.data && typeof error.response.data === 'object') {
+          // Якщо помилка підпису, спробуємо widget
+          if (error.response.data.reasonCode === 1113 || error.response.data.reason === 'Invalid signature') {
+            console.warn('[WayForPay] Invalid signature error, trying widget method...');
+            try {
+              return this.createPaymentViaWidget(requestData, orderReference, paymentAmount);
+            } catch (widgetError) {
+              console.error('[WayForPay] Widget method also failed:', widgetError);
+            }
+          }
           const errorMsg = error.response.data.reason || error.response.data.errorMessage || error.response.data.message || 'Невідома помилка';
           throw new Error(`WayForPay помилка: ${errorMsg}`);
         }
@@ -134,25 +160,80 @@ export class PaymentService {
 
   /**
    * Створює підпис для WayForPay
+   * Для CREATE_INVOICE підпис формується БЕЗ returnUrl та serviceUrl
    * Підпис = MD5(merchantAccount;merchantDomainName;orderReference;orderDate;amount;currency;productName;productCount;productPrice + secretKey)
    */
   createWayForPaySignature(data, secretKey) {
+    // Створюємо копію даних без полів, які не входять в підпис
+    const signatureData = {
+      merchantAccount: data.merchantAccount,
+      merchantDomainName: data.merchantDomainName,
+      orderReference: data.orderReference,
+      orderDate: data.orderDate,
+      amount: data.amount,
+      currency: data.currency,
+      productName: data.productName,
+      productCount: data.productCount,
+      productPrice: data.productPrice,
+    };
+
+    // Формуємо підпис згідно з документацією WayForPay
+    // Порядок: merchantAccount;merchantDomainName;orderReference;orderDate;amount;currency;productName;productCount;productPrice
     const signatureString = [
-      data.merchantAccount,
-      data.merchantDomainName,
-      data.orderReference,
-      data.orderDate,
-      data.amount,
-      data.currency,
-      data.productName.join(';'),
-      data.productCount.join(';'),
-      data.productPrice.join(';'),
+      String(signatureData.merchantAccount),
+      String(signatureData.merchantDomainName),
+      String(signatureData.orderReference),
+      String(signatureData.orderDate),
+      String(signatureData.amount),
+      String(signatureData.currency),
+      signatureData.productName.join(';'),
+      signatureData.productCount.join(';'),
+      signatureData.productPrice.join(';'),
     ].join(';');
 
-    return crypto
+    console.log('[WayForPay] Signature string (without key):', signatureString);
+    
+    const signature = crypto
       .createHash('md5')
       .update(signatureString + secretKey)
       .digest('hex');
+    
+    console.log('[WayForPay] Calculated signature:', signature);
+    
+    return signature;
+  }
+
+  /**
+   * Створює платіж через WayForPay Widget (альтернативний метод, якщо API не працює)
+   */
+  createPaymentViaWidget(requestData, orderReference, paymentAmount) {
+    // Формуємо URL для widget WayForPay
+    const widgetUrl = 'https://secure.wayforpay.com/pay';
+    
+    // Створюємо параметри для GET запиту
+    const params = new URLSearchParams();
+    params.append('merchantAccount', requestData.merchantAccount);
+    params.append('merchantDomainName', requestData.merchantDomainName);
+    params.append('orderReference', requestData.orderReference);
+    params.append('orderDate', String(requestData.orderDate));
+    params.append('amount', String(requestData.amount));
+    params.append('currency', requestData.currency);
+    params.append('productName[]', requestData.productName[0]);
+    params.append('productCount[]', String(requestData.productCount[0]));
+    params.append('productPrice[]', String(requestData.productPrice[0]));
+    params.append('returnUrl', requestData.returnUrl);
+    params.append('serviceUrl', requestData.serviceUrl);
+    params.append('merchantSignature', requestData.merchantSignature);
+    
+    const checkoutUrl = `${widgetUrl}?${params.toString()}`;
+    
+    console.log('[WayForPay] Using widget method, URL:', checkoutUrl);
+    
+    return {
+      orderId: orderReference,
+      checkoutUrl: checkoutUrl,
+      amount: paymentAmount / 100,
+    };
   }
 
   /**
