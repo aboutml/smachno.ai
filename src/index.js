@@ -648,6 +648,102 @@ webhookApp.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Проміжна сторінка для WayForPay widget (POST форма)
+webhookApp.get('/payment/form/:orderReference', async (req, res) => {
+  try {
+    const { orderReference } = req.params;
+    
+    // В реальному проєкті тут потрібно отримати дані платежу з БД або кешу
+    // Для MVP використовуємо дані з сесії або параметрів
+    
+    // Отримуємо дані з query параметрів (тимчасове рішення)
+    const paymentData = {
+      merchantAccount: req.query.merchantAccount || config.payment.wayForPayMerchantAccount,
+      merchantDomainName: req.query.merchantDomainName || config.payment.merchantDomainName,
+      orderReference: orderReference,
+      orderDate: parseInt(req.query.orderDate) || Math.floor(Date.now() / 1000),
+      amount: parseInt(req.query.amount) || config.payment.amount * 100,
+      currency: req.query.currency || config.payment.currency,
+      productName: [req.query.productName || 'Генерація креативу для Instagram'],
+      productCount: [1],
+      productPrice: [parseInt(req.query.amount) || config.payment.amount * 100],
+      returnUrl: req.query.returnUrl || `${process.env.APP_URL || 'https://your-app.com'}/payment/callback`,
+      serviceUrl: req.query.serviceUrl || `${process.env.APP_URL || 'https://your-app.com'}/payment/webhook`,
+    };
+    
+    // Створюємо підпис
+    const signature = paymentService.createWayForPaySignature(paymentData, config.payment.wayForPaySecretKey);
+    paymentData.merchantSignature = signature;
+    
+    // Генеруємо HTML форму, яка автоматично відправить POST до WayForPay
+    const html = `
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Перенаправлення на оплату...</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: #f5f5f5;
+        }
+        .loader {
+            text-align: center;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="loader">
+        <div class="spinner"></div>
+        <p>Перенаправлення на сторінку оплати...</p>
+    </div>
+    <form id="wayforpayForm" method="POST" action="https://secure.wayforpay.com/pay">
+        <input type="hidden" name="merchantAccount" value="${paymentData.merchantAccount}">
+        <input type="hidden" name="merchantDomainName" value="${paymentData.merchantDomainName}">
+        <input type="hidden" name="orderReference" value="${paymentData.orderReference}">
+        <input type="hidden" name="orderDate" value="${paymentData.orderDate}">
+        <input type="hidden" name="amount" value="${paymentData.amount}">
+        <input type="hidden" name="currency" value="${paymentData.currency}">
+        <input type="hidden" name="productName[]" value="${paymentData.productName[0]}">
+        <input type="hidden" name="productCount[]" value="${paymentData.productCount[0]}">
+        <input type="hidden" name="productPrice[]" value="${paymentData.productPrice[0]}">
+        <input type="hidden" name="returnUrl" value="${paymentData.returnUrl}">
+        <input type="hidden" name="serviceUrl" value="${paymentData.serviceUrl}">
+        <input type="hidden" name="merchantSignature" value="${paymentData.merchantSignature}">
+    </form>
+    <script>
+        // Автоматично відправляємо форму
+        document.getElementById('wayforpayForm').submit();
+    </script>
+</body>
+</html>`;
+
+    res.send(html);
+  } catch (error) {
+    console.error('[payment/form] Error:', error);
+    res.status(500).send('Помилка створення форми оплати');
+  }
+});
+
 // Запуск бота та webhook сервера
 console.log('🤖 Запуск бота та webhook сервера...');
 

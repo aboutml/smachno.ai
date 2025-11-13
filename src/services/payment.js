@@ -205,33 +205,28 @@ export class PaymentService {
 
   /**
    * Створює платіж через WayForPay Widget (альтернативний метод, якщо API не працює)
+   * WayForPay widget вимагає POST-запит, тому створюємо проміжну HTML-сторінку
    */
   createPaymentViaWidget(requestData, orderReference, paymentAmount) {
-    // Формуємо URL для widget WayForPay
-    const widgetUrl = 'https://secure.wayforpay.com/pay';
+    // Створюємо URL для проміжної сторінки з параметрами
+    const params = new URLSearchParams({
+      merchantAccount: requestData.merchantAccount,
+      merchantDomainName: requestData.merchantDomainName,
+      orderDate: String(requestData.orderDate),
+      amount: String(requestData.amount),
+      currency: requestData.currency,
+      productName: requestData.productName[0],
+      returnUrl: requestData.returnUrl,
+      serviceUrl: requestData.serviceUrl,
+    });
     
-    // Створюємо параметри для GET запиту
-    const params = new URLSearchParams();
-    params.append('merchantAccount', requestData.merchantAccount);
-    params.append('merchantDomainName', requestData.merchantDomainName);
-    params.append('orderReference', requestData.orderReference);
-    params.append('orderDate', String(requestData.orderDate));
-    params.append('amount', String(requestData.amount));
-    params.append('currency', requestData.currency);
-    params.append('productName[]', requestData.productName[0]);
-    params.append('productCount[]', String(requestData.productCount[0]));
-    params.append('productPrice[]', String(requestData.productPrice[0]));
-    params.append('returnUrl', requestData.returnUrl);
-    params.append('serviceUrl', requestData.serviceUrl);
-    params.append('merchantSignature', requestData.merchantSignature);
+    const intermediateUrl = `${process.env.APP_URL || 'https://your-app.com'}/payment/form/${orderReference}?${params.toString()}`;
     
-    const checkoutUrl = `${widgetUrl}?${params.toString()}`;
-    
-    console.log('[WayForPay] Using widget method, URL:', checkoutUrl);
+    console.log('[WayForPay] Using widget method via intermediate page');
     
     return {
       orderId: orderReference,
-      checkoutUrl: checkoutUrl,
+      checkoutUrl: intermediateUrl,
       amount: paymentAmount / 100,
     };
   }
