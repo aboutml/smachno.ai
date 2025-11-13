@@ -126,10 +126,15 @@ npm start
 
 ### Railway
 
+**Детальна інструкція:** Див. `RAILWAY_SETUP.md`
+
+Коротко:
+
 1. Створіть проєкт на [railway.app](https://railway.app)
 2. Підключіть GitHub репозиторій
-3. Додайте змінні оточення в налаштуваннях
-4. Railway автоматично визначить `package.json` та запустить бота
+3. Додайте всі змінні оточення (включаючи `APP_URL` з Railway domain)
+4. Railway автоматично запустить бота та webhook сервер
+5. Налаштуйте WayForPay webhook URL: `https://your-app.up.railway.app/payment/webhook`
 
 ### Render
 
