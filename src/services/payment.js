@@ -161,9 +161,10 @@ export class PaymentService {
   /**
    * Створює підпис для WayForPay
    * Для CREATE_INVOICE підпис формується БЕЗ returnUrl та serviceUrl
+   * Для widget форми (POST до /pay) підпис може бути іншим
    * Підпис = MD5(merchantAccount;merchantDomainName;orderReference;orderDate;amount;currency;productName;productCount;productPrice + secretKey)
    */
-  createWayForPaySignature(data, secretKey) {
+  createWayForPaySignature(data, secretKey, isWidget = false) {
     // Створюємо копію даних без полів, які не входять в підпис
     const signatureData = {
       merchantAccount: data.merchantAccount,
@@ -179,19 +180,40 @@ export class PaymentService {
 
     // Формуємо підпис згідно з документацією WayForPay
     // Порядок: merchantAccount;merchantDomainName;orderReference;orderDate;amount;currency;productName;productCount;productPrice
-    const signatureString = [
-      String(signatureData.merchantAccount),
-      String(signatureData.merchantDomainName),
-      String(signatureData.orderReference),
-      String(signatureData.orderDate),
-      String(signatureData.amount),
-      String(signatureData.currency),
-      signatureData.productName.join(';'),
-      signatureData.productCount.join(';'),
-      signatureData.productPrice.join(';'),
-    ].join(';');
-
-    console.log('[WayForPay] Signature string (without key):', signatureString);
+    let signatureString;
+    
+    if (isWidget) {
+      // Для widget форми спробуємо включити returnUrl та serviceUrl
+      // (згідно з деякими версіями документації)
+      signatureString = [
+        String(signatureData.merchantAccount),
+        String(signatureData.merchantDomainName),
+        String(signatureData.orderReference),
+        String(signatureData.orderDate),
+        String(signatureData.amount),
+        String(signatureData.currency),
+        signatureData.productName.join(';'),
+        signatureData.productCount.join(';'),
+        signatureData.productPrice.join(';'),
+        data.returnUrl || '',
+        data.serviceUrl || '',
+      ].join(';');
+      console.log('[WayForPay] Widget signature string (with returnUrl/serviceUrl):', signatureString);
+    } else {
+      // Для API (без returnUrl/serviceUrl)
+      signatureString = [
+        String(signatureData.merchantAccount),
+        String(signatureData.merchantDomainName),
+        String(signatureData.orderReference),
+        String(signatureData.orderDate),
+        String(signatureData.amount),
+        String(signatureData.currency),
+        signatureData.productName.join(';'),
+        signatureData.productCount.join(';'),
+        signatureData.productPrice.join(';'),
+      ].join(';');
+      console.log('[WayForPay] API signature string (without returnUrl/serviceUrl):', signatureString);
+    }
     
     const signature = crypto
       .createHash('md5')
