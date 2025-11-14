@@ -804,30 +804,61 @@ console.log(`[Webhook] Використовується порт: ${PORT}`);
 console.log(`[Webhook] APP_URL: ${process.env.APP_URL || 'не встановлено'}`);
 console.log(`[Webhook] Express app готовий, кількість routes: ${webhookApp._router?.stack?.length || 'невідомо'}`);
 
-// Додаємо обробник помилок для сервера
-const server = webhookApp.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ Webhook server запущено на порту ${PORT}`);
-  console.log(`📡 Payment webhook: ${process.env.APP_URL || 'https://your-domain.com'}/payment/webhook`);
-  console.log(`🔗 Payment callback: ${process.env.APP_URL || 'https://your-domain.com'}/payment/callback`);
-  console.log(`🏥 Health check: ${process.env.APP_URL || 'https://your-domain.com'}/health`);
-  console.log(`🌍 Root endpoint: ${process.env.APP_URL || 'https://your-domain.com'}/`);
-  console.log(`[Webhook] Server listening on 0.0.0.0:${PORT}`);
-});
+// Перевіряємо, чи webhookApp правильно ініціалізований
+if (!webhookApp) {
+  console.error('❌ webhookApp не ініціалізований!');
+} else {
+  console.log('[Webhook] webhookApp ініціалізований успішно');
+}
 
-server.on('error', (error) => {
-  console.error('❌ Помилка webhook сервера:', error);
-  if (error.code === 'EADDRINUSE') {
-    console.error(`❌ Порт ${PORT} вже використовується!`);
-  } else {
-    console.error('❌ Error details:', error.message);
-    console.error('❌ Error stack:', error.stack);
-  }
-});
+// Додаємо обробник помилок для сервера ПЕРЕД викликом listen
+let server;
+try {
+  console.log(`[Webhook] Викликаємо listen() на порту ${PORT}...`);
+  server = webhookApp.listen(PORT, '0.0.0.0', () => {
+    console.log(`✅ Webhook server запущено на порту ${PORT}`);
+    console.log(`📡 Payment webhook: ${process.env.APP_URL || 'https://your-domain.com'}/payment/webhook`);
+    console.log(`🔗 Payment callback: ${process.env.APP_URL || 'https://your-domain.com'}/payment/callback`);
+    console.log(`🏥 Health check: ${process.env.APP_URL || 'https://your-domain.com'}/health`);
+    console.log(`🌍 Root endpoint: ${process.env.APP_URL || 'https://your-domain.com'}/`);
+    console.log(`[Webhook] Server listening on 0.0.0.0:${PORT}`);
+  });
+  
+  console.log('[Webhook] listen() викликано, очікуємо callback...');
+  
+  server.on('error', (error) => {
+    console.error('❌ Помилка webhook сервера:', error);
+    if (error.code === 'EADDRINUSE') {
+      console.error(`❌ Порт ${PORT} вже використовується!`);
+    } else {
+      console.error('❌ Error code:', error.code);
+      console.error('❌ Error details:', error.message);
+      console.error('❌ Error stack:', error.stack);
+    }
+  });
 
-server.on('listening', () => {
-  const addr = server.address();
-  console.log(`[Webhook] Server is listening on ${addr.address}:${addr.port}`);
-});
+  server.on('listening', () => {
+    const addr = server.address();
+    console.log(`[Webhook] Server is listening on ${addr.address}:${addr.port}`);
+  });
+  
+  // Перевіряємо стан сервера через невеликий таймаут
+  setTimeout(() => {
+    if (server && server.listening) {
+      console.log(`[Webhook] ✅ Сервер точно працює на порту ${PORT}`);
+    } else {
+      console.warn(`[Webhook] ⚠️ Сервер може не працювати. Стан:`, {
+        listening: server?.listening,
+        address: server?.address(),
+      });
+    }
+  }, 1000);
+  
+} catch (error) {
+  console.error('❌ Помилка при виклику listen():', error);
+  console.error('❌ Error details:', error.message);
+  console.error('❌ Error stack:', error.stack);
+}
 
 // Запуск бота
 console.log('🤖 Запуск бота...');
