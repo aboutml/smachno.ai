@@ -29,6 +29,7 @@ SUPABASE_URL=your_supabase_url
 SUPABASE_KEY=your_supabase_key
 WAYFORPAY_MERCHANT_ACCOUNT=your_merchant_account
 WAYFORPAY_SECRET_KEY=your_secret_key
+WAYFORPAY_MERCHANT_PASSWORD=your_merchant_password  # Опціонально: якщо SECRET_KEY не працює, спробуйте MERCHANT PASSWORD
 MERCHANT_DOMAIN_NAME=your-domain.com
 PAYMENT_AMOUNT=30
 PAYMENT_CURRENCY=UAH
@@ -40,6 +41,7 @@ ADMIN_USER_IDS=123456789
 - `WAYFORPAY_MERCHANT_ACCOUNT` - це ваш merchant account (наприклад: `t_me_6d523`)
 - `MERCHANT_DOMAIN_NAME` - це **ДОМЕН**, а не merchant account! (наприклад: `smachnoai-production.up.railway.app`)
 - `WAYFORPAY_SECRET_KEY` - секретний ключ з налаштувань магазину WayForPay (зазвичай 40 символів)
+- `WAYFORPAY_MERCHANT_PASSWORD` - **опціонально**: якщо `SECRET_KEY` не працює, спробуйте використати `MERCHANT PASSWORD` з розділу "Реквізити мерчанта" в адмін-панелі WayForPay
 
 ### Важливо для webhook:
 

@@ -738,7 +738,9 @@ webhookApp.get('/payment/form/:orderReference', async (req, res) => {
     
     console.log('[payment/form] Creating signature with orderDate:', paymentData.orderDate);
     // Для widget форми використовуємо isWidget = true
-    const signature = paymentService.createWayForPaySignature(paymentData, config.payment.wayForPaySecretKey, true);
+    // Спробуємо використати MERCHANT PASSWORD, якщо він є
+    const secretKeyToUse = config.payment.wayForPayMerchantPassword || config.payment.wayForPaySecretKey;
+    const signature = paymentService.createWayForPaySignature(paymentData, secretKeyToUse, true);
     paymentData.merchantSignature = signature;
     console.log('[payment/form] Signature created:', signature.substring(0, 10) + '...');
     

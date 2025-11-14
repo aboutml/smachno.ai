@@ -16,6 +16,7 @@ export const config = {
   payment: {
     wayForPayMerchantAccount: process.env.WAYFORPAY_MERCHANT_ACCOUNT,
     wayForPaySecretKey: process.env.WAYFORPAY_SECRET_KEY,
+    wayForPayMerchantPassword: process.env.WAYFORPAY_MERCHANT_PASSWORD, // Альтернатива для деяких операцій
     merchantDomainName: process.env.MERCHANT_DOMAIN_NAME || 'your-domain.com',
     amount: parseInt(process.env.PAYMENT_AMOUNT || '30'),
     currency: process.env.PAYMENT_CURRENCY || 'UAH',

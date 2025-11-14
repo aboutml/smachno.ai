@@ -50,9 +50,16 @@ export class PaymentService {
       merchantAccount: config.payment.wayForPayMerchantAccount,
       hasSecretKey: !!config.payment.wayForPaySecretKey,
       secretKeyLength: config.payment.wayForPaySecretKey?.length || 0,
+      hasMerchantPassword: !!config.payment.wayForPayMerchantPassword,
+      merchantPasswordLength: config.payment.wayForPayMerchantPassword?.length || 0,
       merchantDomainName: config.payment.merchantDomainName,
       'merchantDomainName is correct (not merchant account)': !config.payment.merchantDomainName?.includes('t_me_') && config.payment.merchantDomainName?.includes('.'),
     });
+    
+    // Якщо є MERCHANT PASSWORD, спробуємо використати його як альтернативу
+    if (config.payment.wayForPayMerchantPassword) {
+      console.log('[WayForPay] Використовуємо MERCHANT PASSWORD замість SECRET KEY');
+    }
     
     // Перевірка, чи merchantDomainName не є merchant account
     if (config.payment.merchantDomainName && config.payment.merchantDomainName.includes('t_me_')) {
@@ -80,7 +87,9 @@ export class PaymentService {
     }
 
     // Створюємо підпис для WayForPay (БЕЗ returnUrl та serviceUrl)
-    const signature = this.createWayForPaySignature(requestData, config.payment.wayForPaySecretKey);
+    // Спробуємо використати MERCHANT PASSWORD, якщо він є
+    const secretKeyToUse = config.payment.wayForPayMerchantPassword || config.payment.wayForPaySecretKey;
+    const signature = this.createWayForPaySignature(requestData, secretKeyToUse);
     requestData.merchantSignature = signature;
     
     console.log('[WayForPay] Merchant Account:', config.payment.wayForPayMerchantAccount);
@@ -234,6 +243,7 @@ export class PaymentService {
     
     // Стандартна формула для обох випадків (БЕЗ returnUrl/serviceUrl)
     // Це стандартна формула WayForPay для всіх типів запитів
+    // Порядок: merchantAccount;merchantDomainName;orderReference;orderDate;amount;currency;productName;productCount;productPrice
     signatureString = [
       String(signatureData.merchantAccount),
       String(signatureData.merchantDomainName),
@@ -255,6 +265,11 @@ export class PaymentService {
       throw new Error('WAYFORPAY_SECRET_KEY порожній! Перевірте налаштування.');
     }
     
+    // Перевірка, чи secretKey має правильну довжину (зазвичай 40 символів для WayForPay)
+    if (secretKey.length !== 40) {
+      console.warn(`[WayForPay] ⚠️ Secret key має нестандартну довжину: ${secretKey.length} (очікується 40)`);
+    }
+    
     const signature = crypto
       .createHash('md5')
       .update(signatureString + secretKey)
@@ -262,6 +277,32 @@ export class PaymentService {
     
     console.log('[WayForPay] Calculated signature:', signature);
     console.log('[WayForPay] Full signature string (with key):', signatureString + '[' + secretKey.substring(0, 4) + '...]');
+    
+    // Додаткова діагностика: спробуємо альтернативні варіанти (якщо потрібно)
+    if (process.env.WAYFORPAY_DEBUG_SIGNATURE === 'true') {
+      // Варіант 2: з returnUrl та serviceUrl
+      const signatureString2 = [
+        String(signatureData.merchantAccount),
+        String(signatureData.merchantDomainName),
+        String(signatureData.orderReference),
+        String(signatureData.orderDate),
+        String(signatureData.amount),
+        String(signatureData.currency),
+        signatureData.productName.join(';'),
+        signatureData.productCount.join(';'),
+        signatureData.productPrice.join(';'),
+        data.returnUrl || '',
+        data.serviceUrl || '',
+      ].join(';');
+      
+      const signature2 = crypto
+        .createHash('md5')
+        .update(signatureString2 + secretKey)
+        .digest('hex');
+      
+      console.log('[WayForPay] DEBUG: Alternative signature (with returnUrl/serviceUrl):', signature2);
+      console.log('[WayForPay] DEBUG: Alternative signature string:', signatureString2);
+    }
     
     return signature;
   }
