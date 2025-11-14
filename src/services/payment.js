@@ -22,7 +22,8 @@ export class PaymentService {
       orderDate: orderDate,
       amount: paymentAmount,
       currency: config.payment.currency,
-      productName: ['Генерація креативу для Instagram'],
+      // Використовуємо латиницю для тестування (кирилиця може викликати проблеми з підписом)
+      productName: [process.env.WAYFORPAY_PRODUCT_NAME || 'Generation of creative for Instagram'],
       productCount: [1], // Кількість товарів (завжди 1)
       productPrice: [paymentAmount], // Ціна в копійках
       returnUrl: `${process.env.APP_URL || 'https://your-app.com'}/payment/callback`,
@@ -40,6 +41,15 @@ export class PaymentService {
       merchantDomainName: requestData.merchantDomainName,
       orderReference: requestData.orderReference,
       orderDate: requestData.orderDate,
+      productName: requestData.productName[0],
+    });
+    
+    // Перевірка налаштувань
+    console.log('[WayForPay] Configuration check:', {
+      hasMerchantAccount: !!config.payment.wayForPayMerchantAccount,
+      hasSecretKey: !!config.payment.wayForPaySecretKey,
+      secretKeyLength: config.payment.wayForPaySecretKey?.length || 0,
+      merchantDomainName: config.payment.merchantDomainName,
     });
     
     // Перевірка, чи productCount правильний
