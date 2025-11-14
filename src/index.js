@@ -667,7 +667,14 @@ webhookApp.get('/payment/form/:orderReference', async (req, res) => {
     const { orderReference } = req.params;
     
     if (!orderReference) {
+      console.error('[payment/form] Missing orderReference');
       return res.status(400).send('Missing orderReference');
+    }
+    
+    // Перевіряємо наявність конфігурації
+    if (!config.payment.wayForPayMerchantAccount || !config.payment.wayForPaySecretKey) {
+      console.error('[payment/form] WayForPay not configured');
+      return res.status(500).send('Payment service not configured');
     }
     
     // Отримуємо дані з query параметрів
@@ -692,6 +699,11 @@ webhookApp.get('/payment/form/:orderReference', async (req, res) => {
     });
     
     // Створюємо підпис
+    if (!paymentService || !paymentService.createWayForPaySignature) {
+      console.error('[payment/form] PaymentService not available');
+      return res.status(500).send('Payment service not available');
+    }
+    
     const signature = paymentService.createWayForPaySignature(paymentData, config.payment.wayForPaySecretKey);
     paymentData.merchantSignature = signature;
     
@@ -776,24 +788,46 @@ webhookApp.get('/payment/form/:orderReference', async (req, res) => {
   }
 });
 
-// Запуск бота та webhook сервера
-console.log('🤖 Запуск бота та webhook сервера...');
+// Root endpoint для Railway health check
+webhookApp.get('/', (req, res) => {
+  res.status(200).json({ 
+    status: 'ok', 
+    service: 'Смачно.AI Bot & Webhook Server',
+    timestamp: new Date().toISOString() 
+  });
+});
+
+// Запускаємо webhook сервер спочатку (незалежно від бота)
+console.log('🌐 Запуск webhook сервера...');
+const PORT = config.app.port || process.env.PORT || 3000;
+console.log(`[Webhook] Використовується порт: ${PORT}`);
+console.log(`[Webhook] APP_URL: ${process.env.APP_URL || 'не встановлено'}`);
+
+try {
+  webhookApp.listen(PORT, '0.0.0.0', () => {
+    console.log(`✅ Webhook server запущено на порту ${PORT}`);
+    console.log(`📡 Payment webhook: ${process.env.APP_URL || 'https://your-domain.com'}/payment/webhook`);
+    console.log(`🔗 Payment callback: ${process.env.APP_URL || 'https://your-domain.com'}/payment/callback`);
+    console.log(`🏥 Health check: ${process.env.APP_URL || 'https://your-domain.com'}/health`);
+    console.log(`🌍 Root endpoint: ${process.env.APP_URL || 'https://your-domain.com'}/`);
+  });
+} catch (error) {
+  console.error('❌ Помилка запуску webhook сервера:', error);
+  console.error('❌ Error details:', error.message);
+  console.error('❌ Error stack:', error.stack);
+}
+
+// Запуск бота
+console.log('🤖 Запуск бота...');
 
 setupCommands().then(() => {
   return bot.launch();
 }).then(() => {
   console.log('✅ Бот запущено успішно!');
-  
-  // Запускаємо webhook сервер на тому ж порту
-  const PORT = config.app.port || process.env.PORT || 3000;
-  webhookApp.listen(PORT, () => {
-    console.log(`🌐 Webhook server запущено на порту ${PORT}`);
-    console.log(`📡 Payment webhook: ${process.env.APP_URL || 'https://your-domain.com'}/payment/webhook`);
-    console.log(`🔗 Payment callback: ${process.env.APP_URL || 'https://your-domain.com'}/payment/callback`);
-  });
 }).catch((err) => {
-  console.error('❌ Помилка запуску:', err);
-  process.exit(1);
+  console.error('❌ Помилка запуску бота:', err);
+  // Не завершуємо процес, щоб webhook сервер продовжував працювати
+  console.error('⚠️ Webhook сервер продовжує працювати, але бот недоступний');
 });
 
 // Graceful shutdown
