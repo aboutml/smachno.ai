@@ -247,6 +247,13 @@ export class PaymentService {
     ].join(';');
     
     console.log(`[WayForPay] ${isWidget ? 'Widget' : 'API'} signature string (standard, without returnUrl/serviceUrl):`, signatureString);
+    console.log(`[WayForPay] Secret key length: ${secretKey?.length || 0} characters`);
+    console.log(`[WayForPay] Secret key: ${secretKey}`);
+    
+    // Перевірка, чи secretKey не порожній
+    if (!secretKey || secretKey.length === 0) {
+      throw new Error('WAYFORPAY_SECRET_KEY порожній! Перевірте налаштування.');
+    }
     
     const signature = crypto
       .createHash('md5')
@@ -254,6 +261,7 @@ export class PaymentService {
       .digest('hex');
     
     console.log('[WayForPay] Calculated signature:', signature);
+    console.log('[WayForPay] Full signature string (with key):', signatureString + '[' + secretKey.substring(0, 4) + '...]');
     
     return signature;
   }

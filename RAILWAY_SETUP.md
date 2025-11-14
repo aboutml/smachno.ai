@@ -35,6 +35,12 @@ PAYMENT_CURRENCY=UAH
 ADMIN_USER_IDS=123456789
 ```
 
+**⚠️ ВАЖЛИВО для WayForPay:**
+
+- `WAYFORPAY_MERCHANT_ACCOUNT` - це ваш merchant account (наприклад: `t_me_6d523`)
+- `MERCHANT_DOMAIN_NAME` - це **ДОМЕН**, а не merchant account! (наприклад: `smachnoai-production.up.railway.app`)
+- `WAYFORPAY_SECRET_KEY` - секретний ключ з налаштувань магазину WayForPay (зазвичай 40 символів)
+
 ### Важливо для webhook:
 
 ```env
