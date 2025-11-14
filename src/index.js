@@ -542,6 +542,17 @@ bot.hears('❓ Допомога', async (ctx) => {
 
 // Запускаємо webhook сервер
 const webhookApp = express();
+
+// Middleware для логування всіх запитів (для діагностики)
+webhookApp.use((req, res, next) => {
+  console.log(`[Webhook] ${new Date().toISOString()} ${req.method} ${req.path}`, {
+    query: req.query,
+    body: req.body ? Object.keys(req.body) : 'no body',
+    ip: req.ip || req.connection.remoteAddress,
+  });
+  next();
+});
+
 webhookApp.use(express.json());
 webhookApp.use(express.urlencoded({ extended: true }));
 
@@ -643,9 +654,24 @@ webhookApp.get('/payment/callback', async (req, res) => {
   }
 });
 
-// Health check endpoint
+// Health check endpoint (для Railway та інших платформ)
 webhookApp.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+  try {
+    res.status(200).json({ 
+      status: 'ok', 
+      timestamp: new Date().toISOString(),
+      service: 'Смачно.AI Webhook Server',
+      uptime: process.uptime()
+    });
+  } catch (error) {
+    console.error('[health] Error:', error);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// Додатковий endpoint для Railway health check
+webhookApp.get('/healthz', (req, res) => {
+  res.status(200).send('OK');
 });
 
 // Функція для екранування HTML
