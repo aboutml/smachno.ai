@@ -23,11 +23,30 @@ export class PaymentService {
       amount: paymentAmount,
       currency: config.payment.currency,
       productName: ['Генерація креативу для Instagram'],
-      productCount: [1],
-      productPrice: [paymentAmount],
+      productCount: [1], // Кількість товарів (завжди 1)
+      productPrice: [paymentAmount], // Ціна в копійках
       returnUrl: `${process.env.APP_URL || 'https://your-app.com'}/payment/callback`,
       serviceUrl: `${process.env.APP_URL || 'https://your-app.com'}/payment/webhook`,
     };
+    
+    // Перевірка правильності даних
+    console.log('[WayForPay] Request data validation:', {
+      productCount: requestData.productCount,
+      productPrice: requestData.productPrice,
+      amount: requestData.amount,
+      'productCount[0] === 1': requestData.productCount[0] === 1,
+      'productPrice[0] === amount': requestData.productPrice[0] === requestData.amount,
+      merchantAccount: requestData.merchantAccount,
+      merchantDomainName: requestData.merchantDomainName,
+      orderReference: requestData.orderReference,
+      orderDate: requestData.orderDate,
+    });
+    
+    // Перевірка, чи productCount правильний
+    if (requestData.productCount[0] !== 1) {
+      console.error('[WayForPay] ERROR: productCount має бути [1], але отримано:', requestData.productCount);
+      requestData.productCount = [1]; // Виправляємо
+    }
 
     // Перевіряємо наявність обов'язкових полів
     if (!config.payment.wayForPayMerchantAccount) {
@@ -59,13 +78,16 @@ export class PaymentService {
     try {
       // Викликаємо WayForPay API для створення інвойсу
       // WayForPay вимагає apiVersion в запиті
+      // Переконуємося, що productCount правильний перед відправкою
       const requestPayload = {
         transactionType: 'CREATE_INVOICE',
         apiVersion: 1,
         ...requestData,
+        productCount: [1], // ВАЖЛИВО: завжди [1], не amount!
       };
 
       console.log('[WayForPay] Request payload:', JSON.stringify(requestPayload, null, 2));
+      console.log('[WayForPay] Payload validation - productCount:', requestPayload.productCount, 'має бути [1]');
       console.log('[WayForPay] API endpoint: https://api.wayforpay.com/api');
 
       const response = await axios.post(

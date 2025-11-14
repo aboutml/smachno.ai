@@ -716,8 +716,8 @@ webhookApp.get('/payment/form/:orderReference', async (req, res) => {
       amount: amount,
       currency: req.query.currency || config.payment.currency,
       productName: [req.query.productName || 'Генерація креативу для Instagram'],
-      productCount: [1],
-      productPrice: [amount],
+      productCount: [1], // ВАЖЛИВО: завжди 1, не amount!
+      productPrice: [amount], // Ціна в копійках
       returnUrl: req.query.returnUrl || `${process.env.APP_URL || 'https://your-app.com'}/payment/callback`,
       serviceUrl: req.query.serviceUrl || `${process.env.APP_URL || 'https://your-app.com'}/payment/webhook`,
     };
