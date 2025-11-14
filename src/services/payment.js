@@ -182,38 +182,29 @@ export class PaymentService {
     // Порядок: merchantAccount;merchantDomainName;orderReference;orderDate;amount;currency;productName;productCount;productPrice
     let signatureString;
     
+    // Для widget форми та API використовуємо однакову формулу підпису
+    // (БЕЗ returnUrl та serviceUrl) - це стандартна формула WayForPay
     if (isWidget) {
-      // Для widget форми спробуємо включити returnUrl та serviceUrl
-      // (згідно з деякими версіями документації)
-      signatureString = [
-        String(signatureData.merchantAccount),
-        String(signatureData.merchantDomainName),
-        String(signatureData.orderReference),
-        String(signatureData.orderDate),
-        String(signatureData.amount),
-        String(signatureData.currency),
-        signatureData.productName.join(';'),
-        signatureData.productCount.join(';'),
-        signatureData.productPrice.join(';'),
-        data.returnUrl || '',
-        data.serviceUrl || '',
-      ].join(';');
-      console.log('[WayForPay] Widget signature string (with returnUrl/serviceUrl):', signatureString);
+      console.log('[WayForPay] Widget form - using standard signature (without returnUrl/serviceUrl)');
     } else {
-      // Для API (без returnUrl/serviceUrl)
-      signatureString = [
-        String(signatureData.merchantAccount),
-        String(signatureData.merchantDomainName),
-        String(signatureData.orderReference),
-        String(signatureData.orderDate),
-        String(signatureData.amount),
-        String(signatureData.currency),
-        signatureData.productName.join(';'),
-        signatureData.productCount.join(';'),
-        signatureData.productPrice.join(';'),
-      ].join(';');
-      console.log('[WayForPay] API signature string (without returnUrl/serviceUrl):', signatureString);
+      console.log('[WayForPay] API - using standard signature (without returnUrl/serviceUrl)');
     }
+    
+    // Стандартна формула для обох випадків (БЕЗ returnUrl/serviceUrl)
+    // Це стандартна формула WayForPay для всіх типів запитів
+    signatureString = [
+      String(signatureData.merchantAccount),
+      String(signatureData.merchantDomainName),
+      String(signatureData.orderReference),
+      String(signatureData.orderDate),
+      String(signatureData.amount),
+      String(signatureData.currency),
+      signatureData.productName.join(';'),
+      signatureData.productCount.join(';'),
+      signatureData.productPrice.join(';'),
+    ].join(';');
+    
+    console.log(`[WayForPay] ${isWidget ? 'Widget' : 'API'} signature string (standard, without returnUrl/serviceUrl):`, signatureString);
     
     const signature = crypto
       .createHash('md5')
