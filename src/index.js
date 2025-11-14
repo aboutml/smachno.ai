@@ -802,20 +802,32 @@ console.log('🌐 Запуск webhook сервера...');
 const PORT = config.app.port || process.env.PORT || 3000;
 console.log(`[Webhook] Використовується порт: ${PORT}`);
 console.log(`[Webhook] APP_URL: ${process.env.APP_URL || 'не встановлено'}`);
+console.log(`[Webhook] Express app готовий, кількість routes: ${webhookApp._router?.stack?.length || 'невідомо'}`);
 
-try {
-  webhookApp.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Webhook server запущено на порту ${PORT}`);
-    console.log(`📡 Payment webhook: ${process.env.APP_URL || 'https://your-domain.com'}/payment/webhook`);
-    console.log(`🔗 Payment callback: ${process.env.APP_URL || 'https://your-domain.com'}/payment/callback`);
-    console.log(`🏥 Health check: ${process.env.APP_URL || 'https://your-domain.com'}/health`);
-    console.log(`🌍 Root endpoint: ${process.env.APP_URL || 'https://your-domain.com'}/`);
-  });
-} catch (error) {
-  console.error('❌ Помилка запуску webhook сервера:', error);
-  console.error('❌ Error details:', error.message);
-  console.error('❌ Error stack:', error.stack);
-}
+// Додаємо обробник помилок для сервера
+const server = webhookApp.listen(PORT, '0.0.0.0', () => {
+  console.log(`✅ Webhook server запущено на порту ${PORT}`);
+  console.log(`📡 Payment webhook: ${process.env.APP_URL || 'https://your-domain.com'}/payment/webhook`);
+  console.log(`🔗 Payment callback: ${process.env.APP_URL || 'https://your-domain.com'}/payment/callback`);
+  console.log(`🏥 Health check: ${process.env.APP_URL || 'https://your-domain.com'}/health`);
+  console.log(`🌍 Root endpoint: ${process.env.APP_URL || 'https://your-domain.com'}/`);
+  console.log(`[Webhook] Server listening on 0.0.0.0:${PORT}`);
+});
+
+server.on('error', (error) => {
+  console.error('❌ Помилка webhook сервера:', error);
+  if (error.code === 'EADDRINUSE') {
+    console.error(`❌ Порт ${PORT} вже використовується!`);
+  } else {
+    console.error('❌ Error details:', error.message);
+    console.error('❌ Error stack:', error.stack);
+  }
+});
+
+server.on('listening', () => {
+  const addr = server.address();
+  console.log(`[Webhook] Server is listening on ${addr.address}:${addr.port}`);
+});
 
 // Запуск бота
 console.log('🤖 Запуск бота...');
