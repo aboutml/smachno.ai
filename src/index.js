@@ -704,16 +704,20 @@ webhookApp.get('/payment/form/:orderReference', async (req, res) => {
     }
     
     // Отримуємо дані з query параметрів
+    // ВАЖЛИВО: orderDate має бути однаковим для підпису та форми!
+    const orderDate = parseInt(req.query.orderDate) || Math.floor(Date.now() / 1000);
+    const amount = parseInt(req.query.amount) || config.payment.amount * 100;
+    
     const paymentData = {
       merchantAccount: req.query.merchantAccount || config.payment.wayForPayMerchantAccount,
       merchantDomainName: req.query.merchantDomainName || config.payment.merchantDomainName,
       orderReference: orderReference,
-      orderDate: parseInt(req.query.orderDate) || Math.floor(Date.now() / 1000),
-      amount: parseInt(req.query.amount) || config.payment.amount * 100,
+      orderDate: orderDate, // Фіксуємо orderDate
+      amount: amount,
       currency: req.query.currency || config.payment.currency,
       productName: [req.query.productName || 'Генерація креативу для Instagram'],
       productCount: [1],
-      productPrice: [parseInt(req.query.amount) || config.payment.amount * 100],
+      productPrice: [amount],
       returnUrl: req.query.returnUrl || `${process.env.APP_URL || 'https://your-app.com'}/payment/callback`,
       serviceUrl: req.query.serviceUrl || `${process.env.APP_URL || 'https://your-app.com'}/payment/webhook`,
     };
@@ -722,16 +726,19 @@ webhookApp.get('/payment/form/:orderReference', async (req, res) => {
       merchantAccount: paymentData.merchantAccount,
       orderReference: paymentData.orderReference,
       amount: paymentData.amount,
+      orderDate: paymentData.orderDate,
     });
     
-    // Створюємо підпис
+    // Створюємо підпис (ВАЖЛИВО: використовуємо той самий orderDate!)
     if (!paymentService || !paymentService.createWayForPaySignature) {
       console.error('[payment/form] PaymentService not available');
       return res.status(500).send('Payment service not available');
     }
     
+    console.log('[payment/form] Creating signature with orderDate:', paymentData.orderDate);
     const signature = paymentService.createWayForPaySignature(paymentData, config.payment.wayForPaySecretKey);
     paymentData.merchantSignature = signature;
+    console.log('[payment/form] Signature created:', signature.substring(0, 10) + '...');
     
     console.log('[payment/form] Signature created, generating HTML form...');
     

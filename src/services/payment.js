@@ -208,24 +208,28 @@ export class PaymentService {
    * Створюємо просту HTML-форму, яка автоматично відправляє POST до WayForPay
    */
   createPaymentViaWidget(requestData, orderReference, paymentAmount) {
-    // Створюємо просту HTML-форму з усіма даними
-    // Ця форма буде відкриватися в Telegram WebView або браузері
-    const htmlForm = this.createWayForPayForm(requestData);
+    // Створюємо URL для проміжної сторінки з ВСІМА параметрами
+    // ВАЖЛИВО: передаємо orderDate, щоб він був однаковим для підпису та форми!
+    const params = new URLSearchParams({
+      merchantAccount: requestData.merchantAccount,
+      merchantDomainName: requestData.merchantDomainName,
+      orderDate: String(requestData.orderDate), // ВАЖЛИВО: передаємо orderDate!
+      amount: String(requestData.amount),
+      currency: requestData.currency,
+      productName: requestData.productName[0],
+      returnUrl: requestData.returnUrl,
+      serviceUrl: requestData.serviceUrl,
+    });
     
-    // Зберігаємо форму в тимчасовий файл або повертаємо як data URL
-    // Для Telegram краще використати data URL або згенерувати тимчасову сторінку
-    
-    // Альтернатива: створюємо просту сторінку на нашому сервері
-    const formUrl = `${process.env.APP_URL || 'https://your-app.com'}/payment/form/${orderReference}`;
+    const formUrl = `${process.env.APP_URL || 'https://your-app.com'}/payment/form/${orderReference}?${params.toString()}`;
     
     console.log('[WayForPay] Using widget method - готова форма WayForPay');
+    console.log('[WayForPay] Form URL with orderDate:', requestData.orderDate);
     
     return {
       orderId: orderReference,
       checkoutUrl: formUrl,
       amount: paymentAmount / 100,
-      // Зберігаємо дані для форми
-      formData: requestData,
     };
   }
 
