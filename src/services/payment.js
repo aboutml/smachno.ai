@@ -204,31 +204,105 @@ export class PaymentService {
   }
 
   /**
-   * Створює платіж через WayForPay Widget (альтернативний метод, якщо API не працює)
-   * WayForPay widget вимагає POST-запит, тому створюємо проміжну HTML-сторінку
+   * Створює платіж через WayForPay Widget (використовуємо готову сторінку WayForPay)
+   * Створюємо просту HTML-форму, яка автоматично відправляє POST до WayForPay
    */
   createPaymentViaWidget(requestData, orderReference, paymentAmount) {
-    // Створюємо URL для проміжної сторінки з параметрами
-    const params = new URLSearchParams({
-      merchantAccount: requestData.merchantAccount,
-      merchantDomainName: requestData.merchantDomainName,
-      orderDate: String(requestData.orderDate),
-      amount: String(requestData.amount),
-      currency: requestData.currency,
-      productName: requestData.productName[0],
-      returnUrl: requestData.returnUrl,
-      serviceUrl: requestData.serviceUrl,
-    });
+    // Створюємо просту HTML-форму з усіма даними
+    // Ця форма буде відкриватися в Telegram WebView або браузері
+    const htmlForm = this.createWayForPayForm(requestData);
     
-    const intermediateUrl = `${process.env.APP_URL || 'https://your-app.com'}/payment/form/${orderReference}?${params.toString()}`;
+    // Зберігаємо форму в тимчасовий файл або повертаємо як data URL
+    // Для Telegram краще використати data URL або згенерувати тимчасову сторінку
     
-    console.log('[WayForPay] Using widget method via intermediate page');
+    // Альтернатива: створюємо просту сторінку на нашому сервері
+    const formUrl = `${process.env.APP_URL || 'https://your-app.com'}/payment/form/${orderReference}`;
+    
+    console.log('[WayForPay] Using widget method - готова форма WayForPay');
     
     return {
       orderId: orderReference,
-      checkoutUrl: intermediateUrl,
+      checkoutUrl: formUrl,
       amount: paymentAmount / 100,
+      // Зберігаємо дані для форми
+      formData: requestData,
     };
+  }
+
+  /**
+   * Створює HTML-форму для WayForPay (готову сторінку)
+   */
+  createWayForPayForm(requestData) {
+    // Екрануємо значення для HTML
+    const escapeHtml = (str) => {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    };
+
+    return `<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Оплата через WayForPay</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: #f5f5f5;
+        }
+        .loader {
+            text-align: center;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="loader">
+        <div class="spinner"></div>
+        <p>Перенаправлення на сторінку оплати WayForPay...</p>
+    </div>
+    <form id="wayforpayForm" method="POST" action="https://secure.wayforpay.com/pay">
+        <input type="hidden" name="merchantAccount" value="${escapeHtml(requestData.merchantAccount)}">
+        <input type="hidden" name="merchantDomainName" value="${escapeHtml(requestData.merchantDomainName)}">
+        <input type="hidden" name="orderReference" value="${escapeHtml(requestData.orderReference)}">
+        <input type="hidden" name="orderDate" value="${escapeHtml(String(requestData.orderDate))}">
+        <input type="hidden" name="amount" value="${escapeHtml(String(requestData.amount))}">
+        <input type="hidden" name="currency" value="${escapeHtml(requestData.currency)}">
+        <input type="hidden" name="productName[]" value="${escapeHtml(requestData.productName[0])}">
+        <input type="hidden" name="productCount[]" value="${escapeHtml(String(requestData.productCount[0]))}">
+        <input type="hidden" name="productPrice[]" value="${escapeHtml(String(requestData.productPrice[0]))}">
+        <input type="hidden" name="returnUrl" value="${escapeHtml(requestData.returnUrl)}">
+        <input type="hidden" name="serviceUrl" value="${escapeHtml(requestData.serviceUrl)}">
+        <input type="hidden" name="merchantSignature" value="${escapeHtml(requestData.merchantSignature)}">
+    </form>
+    <script>
+        // Автоматично відправляємо форму
+        document.getElementById('wayforpayForm').submit();
+    </script>
+</body>
+</html>`;
   }
 
   /**

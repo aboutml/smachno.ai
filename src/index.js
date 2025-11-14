@@ -735,7 +735,8 @@ webhookApp.get('/payment/form/:orderReference', async (req, res) => {
     
     console.log('[payment/form] Signature created, generating HTML form...');
     
-    // Генеруємо HTML форму, яка автоматично відправить POST до WayForPay
+    // Використовуємо готову форму WayForPay (дефолтна сторінка WayForPay)
+    // Форма автоматично відправляє POST на https://secure.wayforpay.com/pay
     const html = `<!DOCTYPE html>
 <html lang="uk">
 <head>
