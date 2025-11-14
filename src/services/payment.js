@@ -47,10 +47,20 @@ export class PaymentService {
     // Перевірка налаштувань
     console.log('[WayForPay] Configuration check:', {
       hasMerchantAccount: !!config.payment.wayForPayMerchantAccount,
+      merchantAccount: config.payment.wayForPayMerchantAccount,
       hasSecretKey: !!config.payment.wayForPaySecretKey,
       secretKeyLength: config.payment.wayForPaySecretKey?.length || 0,
       merchantDomainName: config.payment.merchantDomainName,
+      'merchantDomainName is correct (not merchant account)': !config.payment.merchantDomainName?.includes('t_me_') && config.payment.merchantDomainName?.includes('.'),
     });
+    
+    // Перевірка, чи merchantDomainName не є merchant account
+    if (config.payment.merchantDomainName && config.payment.merchantDomainName.includes('t_me_')) {
+      console.error('[WayForPay] ⚠️ ПОМИЛКА: MERCHANT_DOMAIN_NAME вказано як merchant account!');
+      console.error('[WayForPay] MERCHANT_DOMAIN_NAME має бути доменом (наприклад: smachnoai-production.up.railway.app)');
+      console.error('[WayForPay] Поточне значення:', config.payment.merchantDomainName);
+      console.error('[WayForPay] Це може бути причиною помилки "Invalid signature"!');
+    }
     
     // Перевірка, чи productCount правильний
     if (requestData.productCount[0] !== 1) {
