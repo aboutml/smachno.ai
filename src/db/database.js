@@ -169,26 +169,76 @@ export class Database {
     if (!existingPayment) {
       console.log(`[updatePaymentStatus] Payment ${paymentId} not found, creating new payment record`);
       
-      // Якщо userId не передано, намагаємося витягти з paymentId (формат: creative_123456789_timestamp)
-      let extractedUserId = userId;
-      if (!extractedUserId && paymentId && typeof paymentId === 'string') {
+      // Якщо userId не передано, намагаємося витягти telegram_id з paymentId (формат: creative_123456789_timestamp)
+      let extractedTelegramId = null;
+      if (!userId && paymentId && typeof paymentId === 'string') {
         const match = paymentId.match(/creative_(\d+)_/);
         if (match) {
-          extractedUserId = parseInt(match[1]);
-          console.log(`[updatePaymentStatus] Extracted userId ${extractedUserId} from paymentId ${paymentId}`);
+          extractedTelegramId = parseInt(match[1]);
+          console.log(`[updatePaymentStatus] Extracted telegram_id ${extractedTelegramId} from paymentId ${paymentId}`);
         }
       }
 
-      if (!extractedUserId) {
-        console.error(`[updatePaymentStatus] Cannot create payment: userId is required but not provided`);
+      // Знаходимо користувача за telegram_id або використовуємо переданий userId
+      let userToUse = null;
+      if (userId) {
+        // Якщо userId передано, перевіряємо, чи це внутрішній ID або telegram_id
+        const { data: userById } = await supabase
+          .from('users')
+          .select('id')
+          .eq('id', userId)
+          .single();
+        
+        if (userById) {
+          userToUse = userById;
+        } else {
+          // Можливо, це telegram_id
+          const { data: userByTelegramId } = await supabase
+            .from('users')
+            .select('id')
+            .eq('telegram_id', userId)
+            .single();
+          
+          if (userByTelegramId) {
+            userToUse = userByTelegramId;
+          }
+        }
+      } else if (extractedTelegramId) {
+        // Знаходимо користувача за telegram_id
+        let userByTelegramId = await this.getUserByTelegramId(extractedTelegramId);
+        
+        if (userByTelegramId) {
+          userToUse = { id: userByTelegramId.id };
+        } else {
+          // Якщо користувача немає, створюємо його
+          console.log(`[updatePaymentStatus] User with telegram_id ${extractedTelegramId} not found, creating new user`);
+          const newUser = await this.createOrUpdateUser(extractedTelegramId, {
+            username: null,
+            first_name: null,
+          });
+          
+          if (newUser) {
+            userToUse = { id: newUser.id };
+            console.log(`[updatePaymentStatus] Created new user with id ${newUser.id} for telegram_id ${extractedTelegramId}`);
+          } else {
+            console.error(`[updatePaymentStatus] Failed to create user with telegram_id ${extractedTelegramId}`);
+          }
+        }
+      }
+
+      if (!userToUse || !userToUse.id) {
+        console.error(`[updatePaymentStatus] Cannot create payment: user not found. userId=${userId}, extractedTelegramId=${extractedTelegramId}`);
         return null;
       }
+
+      const internalUserId = userToUse.id;
+      console.log(`[updatePaymentStatus] Using internal user_id ${internalUserId} for payment`);
 
       // Створюємо новий платіж
       const { data: newPayment, error: createError } = await supabase
         .from('payments')
         .insert({
-          user_id: extractedUserId,
+          user_id: internalUserId,
           amount: amount || 0,
           currency: currency || 'UAH',
           payment_id: paymentId,
