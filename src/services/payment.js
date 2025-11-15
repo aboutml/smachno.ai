@@ -169,43 +169,116 @@ export class PaymentService {
                 console.warn('[WayForPay] API returned invalid signature (reasonCode: 1113)');
                 
                 // Спробуємо використати інший ключ, якщо є обидва
-                if (config.payment.wayForPaySecretKey && config.payment.wayForPayMerchantPassword && secretKeyToUse === config.payment.wayForPayMerchantPassword) {
-                  console.log('[WayForPay] Спробуємо використати SECRET KEY замість MERCHANT PASSWORD');
-                  const alternativeKey = config.payment.wayForPaySecretKey;
-                  const alternativeSignature = this.createWayForPaySignature(requestData, alternativeKey, false);
-                  requestData.merchantSignature = alternativeSignature;
+                if (config.payment.wayForPaySecretKey && config.payment.wayForPayMerchantPassword) {
+                  // Якщо використовували SECRET KEY, спробуємо MERCHANT PASSWORD
+                  if (secretKeyToUse === config.payment.wayForPaySecretKey) {
+                    console.log('[WayForPay] Спробуємо використати MERCHANT PASSWORD замість SECRET KEY');
+                    const alternativeKey = config.payment.wayForPayMerchantPassword;
+                    const alternativeSignature = this.createWayForPaySignature(requestData, alternativeKey, false);
+                    requestData.merchantSignature = alternativeSignature;
+                    
+                    // Повторний запит з альтернативним ключем
+                    const retryPayload = {
+                      ...requestPayload,
+                      merchantSignature: alternativeSignature,
+                    };
+                    
+                    try {
+                      const retryResponse = await axios.post(
+                        'https://api.wayforpay.com/api',
+                        retryPayload,
+                        {
+                          headers: { 'Content-Type': 'application/json' },
+                          timeout: 10000,
+                        }
+                      );
+                      
+                      if (retryResponse.data && (retryResponse.data.invoiceUrl || retryResponse.data.url)) {
+                        console.log('[WayForPay] ✅ Success with alternative key (MERCHANT PASSWORD)');
+                        return {
+                          orderId: orderReference,
+                          checkoutUrl: retryResponse.data.invoiceUrl || retryResponse.data.url,
+                          amount: paymentAmount / 100,
+                        };
+                      } else if (retryResponse.data && retryResponse.data.reasonCode === 1113) {
+                        console.warn('[WayForPay] MERCHANT PASSWORD also returned invalid signature');
+                      }
+                    } catch (retryError) {
+                      console.error('[WayForPay] Retry with MERCHANT PASSWORD failed:', retryError.message);
+                    }
+                  } else {
+                    // Якщо використовували MERCHANT PASSWORD, спробуємо SECRET KEY
+                    console.log('[WayForPay] Спробуємо використати SECRET KEY замість MERCHANT PASSWORD');
+                    const alternativeKey = config.payment.wayForPaySecretKey;
+                    const alternativeSignature = this.createWayForPaySignature(requestData, alternativeKey, false);
+                    requestData.merchantSignature = alternativeSignature;
+                    
+                    // Повторний запит з альтернативним ключем
+                    const retryPayload = {
+                      ...requestPayload,
+                      merchantSignature: alternativeSignature,
+                    };
+                    
+                    try {
+                      const retryResponse = await axios.post(
+                        'https://api.wayforpay.com/api',
+                        retryPayload,
+                        {
+                          headers: { 'Content-Type': 'application/json' },
+                          timeout: 10000,
+                        }
+                      );
+                      
+                      if (retryResponse.data && (retryResponse.data.invoiceUrl || retryResponse.data.url)) {
+                        console.log('[WayForPay] ✅ Success with alternative key (SECRET KEY)');
+                        return {
+                          orderId: orderReference,
+                          checkoutUrl: retryResponse.data.invoiceUrl || retryResponse.data.url,
+                          amount: paymentAmount / 100,
+                        };
+                      } else if (retryResponse.data && retryResponse.data.reasonCode === 1113) {
+                        console.warn('[WayForPay] SECRET KEY also returned invalid signature');
+                      }
+                    } catch (retryError) {
+                      console.error('[WayForPay] Retry with SECRET KEY failed:', retryError.message);
+                    }
+                  }
                   
-                  // Повторний запит з альтернативним ключем
-                  const retryPayload = {
+                  // Спробуємо також HMAC-MD5, якщо використовували простий MD5
+                  console.log('[WayForPay] Спробуємо використати HMAC-MD5 замість Simple MD5');
+                  const hmacSignature = this.createWayForPaySignature(requestData, secretKeyToUse, false, true);
+                  requestData.merchantSignature = hmacSignature;
+                  
+                  const hmacPayload = {
                     ...requestPayload,
-                    merchantSignature: alternativeSignature,
+                    merchantSignature: hmacSignature,
                   };
                   
                   try {
-                    const retryResponse = await axios.post(
+                    const hmacResponse = await axios.post(
                       'https://api.wayforpay.com/api',
-                      retryPayload,
+                      hmacPayload,
                       {
                         headers: { 'Content-Type': 'application/json' },
                         timeout: 10000,
                       }
                     );
                     
-                    if (retryResponse.data && (retryResponse.data.invoiceUrl || retryResponse.data.url)) {
-                      console.log('[WayForPay] Success with alternative key (SECRET KEY)');
+                    if (hmacResponse.data && (hmacResponse.data.invoiceUrl || hmacResponse.data.url)) {
+                      console.log('[WayForPay] ✅ Success with HMAC-MD5 signature');
                       return {
                         orderId: orderReference,
-                        checkoutUrl: retryResponse.data.invoiceUrl || retryResponse.data.url,
+                        checkoutUrl: hmacResponse.data.invoiceUrl || hmacResponse.data.url,
                         amount: paymentAmount / 100,
                       };
                     }
-                  } catch (retryError) {
-                    console.error('[WayForPay] Retry with alternative key also failed:', retryError.message);
+                  } catch (hmacError) {
+                    console.error('[WayForPay] Retry with HMAC-MD5 failed:', hmacError.message);
                   }
                 }
                 
-                // Якщо альтернативний ключ не допоміг, спробуємо widget
-                console.warn('[WayForPay] Trying widget method as fallback...');
+                // Якщо всі спроби не вдалися, спробуємо widget
+                console.warn('[WayForPay] All API attempts failed, trying widget method as fallback...');
                 return this.createPaymentViaWidget(requestData, orderReference, paymentAmount);
               } else {
                 console.error('[WayForPay] Unexpected response format:', response.data);
@@ -265,7 +338,7 @@ export class PaymentService {
    * Для widget форми (POST до /pay) підпис може бути іншим
    * Підпис = MD5(merchantAccount;merchantDomainName;orderReference;orderDate;amount;currency;productName;productCount;productPrice + secretKey)
    */
-  createWayForPaySignature(data, secretKey, isWidget = false) {
+  createWayForPaySignature(data, secretKey, isWidget = false, forceHmac = false) {
     // Створюємо копію даних без полів, які не входять в підпис
     const signatureData = {
       merchantAccount: data.merchantAccount,
@@ -338,8 +411,8 @@ export class PaymentService {
       .digest('hex');
     
     // Використовуємо простий MD5 (це стандарт для Create Invoice API)
-    // Якщо не працює, можна спробувати HMAC-MD5 через змінну оточення
-    const useHmac = process.env.WAYFORPAY_USE_HMAC === 'true';
+    // Якщо не працює, можна спробувати HMAC-MD5 через змінну оточення або параметр forceHmac
+    const useHmac = forceHmac || process.env.WAYFORPAY_USE_HMAC === 'true';
     const signature = useHmac ? hmacSignature : simpleMd5Signature;
     
     console.log('[WayForPay] Using signature method:', useHmac ? 'HMAC-MD5' : 'Simple MD5 (standard for Create Invoice)');
