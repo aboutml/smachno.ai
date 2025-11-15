@@ -624,35 +624,73 @@ webhookApp.post('/payment/webhook', async (req, res) => {
 });
 
 // Callback endpoint для redirect після оплати
-webhookApp.get('/payment/callback', async (req, res) => {
+// WayForPay може робити як GET, так і POST запити на цей endpoint
+const handlePaymentCallback = async (req, res) => {
   try {
-    const { orderReference, transactionStatus } = req.query;
+    // WayForPay може надсилати дані як через query (GET), так і через body (POST)
+    const orderReference = req.query.orderReference || req.body.orderReference;
+    const transactionStatus = req.query.transactionStatus || req.body.transactionStatus;
+    
+    console.log('[payment/callback] Request received:', {
+      method: req.method,
+      orderReference,
+      transactionStatus,
+      query: req.query,
+      body: req.body,
+    });
+    
     if (transactionStatus === 'Approved') {
       res.send(`
         <html>
-          <head><title>Оплата успішна</title><meta charset="UTF-8"></head>
-          <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
-            <h1>✅ Оплата успішна!</h1>
-            <p>Поверніться до Telegram-бота та створіть новий креатив.</p>
+          <head>
+            <title>Оплата успішна</title>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          </head>
+          <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f5f5f5;">
+            <div style="background: white; padding: 40px; border-radius: 10px; max-width: 500px; margin: 0 auto; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+              <h1 style="color: #4CAF50; margin-bottom: 20px;">✅ Оплата успішна!</h1>
+              <p style="font-size: 16px; color: #333; margin-bottom: 30px;">Поверніться до Telegram-бота та створіть новий креатив.</p>
+              <p style="color: #666; font-size: 14px;">Ви можете закрити цю сторінку.</p>
+            </div>
           </body>
         </html>
       `);
     } else {
       res.send(`
         <html>
-          <head><title>Помилка оплати</title><meta charset="UTF-8"></head>
-          <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
-            <h1>❌ Помилка оплати</h1>
-            <p>Спробуйте ще раз або зверніться до підтримки.</p>
+          <head>
+            <title>Помилка оплати</title>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          </head>
+          <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f5f5f5;">
+            <div style="background: white; padding: 40px; border-radius: 10px; max-width: 500px; margin: 0 auto; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+              <h1 style="color: #f44336; margin-bottom: 20px;">❌ Помилка оплати</h1>
+              <p style="font-size: 16px; color: #333; margin-bottom: 30px;">Спробуйте ще раз або зверніться до підтримки.</p>
+              <p style="color: #666; font-size: 14px;">Ви можете закрити цю сторінку.</p>
+            </div>
           </body>
         </html>
       `);
     }
   } catch (error) {
-    console.error('Error processing payment callback:', error);
-    res.status(500).send('Error');
+    console.error('[payment/callback] Error processing payment callback:', error);
+    res.status(500).send(`
+      <html>
+        <head><title>Помилка</title><meta charset="UTF-8"></head>
+        <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+          <h1>Помилка обробки запиту</h1>
+          <p>Спробуйте ще раз пізніше.</p>
+        </body>
+      </html>
+    `);
   }
-});
+};
+
+// Обробляємо як GET, так і POST запити
+webhookApp.get('/payment/callback', handlePaymentCallback);
+webhookApp.post('/payment/callback', handlePaymentCallback);
 
 // Health check endpoint (для Railway та інших платформ)
 webhookApp.get('/health', (req, res) => {
