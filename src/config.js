@@ -7,7 +7,7 @@ export const config = {
     token: process.env.TELEGRAM_BOT_TOKEN,
   },
   openai: {
-    apiKey: process.env.OPENAI_API_KEY,
+    apiKey: (process.env.OPENAI_API_KEY || '').trim(),
   },
   supabase: {
     url: process.env.SUPABASE_URL,
@@ -44,5 +44,27 @@ for (const envVar of requiredEnvVars) {
   if (!process.env[envVar]) {
     console.warn(`⚠️  Warning: ${envVar} is not set`);
   }
+}
+
+// Валідація OpenAI API ключа
+if (config.openai.apiKey) {
+  // Перевіряємо, чи немає зайвих символів (переноси рядків, пробіли)
+  const cleanedKey = config.openai.apiKey.replace(/\s+/g, '');
+  if (cleanedKey !== config.openai.apiKey) {
+    console.warn('⚠️  Warning: OPENAI_API_KEY contains whitespace characters, cleaning...');
+    config.openai.apiKey = cleanedKey;
+  }
+  
+  // Перевіряємо формат ключа (має починатися з sk-)
+  if (!config.openai.apiKey.startsWith('sk-')) {
+    console.warn('⚠️  Warning: OPENAI_API_KEY does not start with "sk-", may be invalid');
+  }
+  
+  // Перевіряємо довжину (мінімум 20 символів)
+  if (config.openai.apiKey.length < 20) {
+    console.warn('⚠️  Warning: OPENAI_API_KEY seems too short, may be invalid');
+  }
+} else {
+  console.error('❌ Error: OPENAI_API_KEY is not set or empty');
 }
 

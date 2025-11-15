@@ -818,6 +818,9 @@ webhookApp.post('/payment/webhook', async (req, res) => {
       }
     }
 
+    // WayForPay очікує відповідь у форматі: { "orderReference": "...", "status": "accept" }
+    // Це підтверджує, що ми отримали та обробили webhook
+    console.log('[payment/webhook] Sending success response to WayForPay');
     res.status(200).json({ orderReference, status: 'accept' });
   } catch (error) {
     console.error('Error processing WayForPay webhook:', error);
