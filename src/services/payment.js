@@ -10,7 +10,7 @@ export class PaymentService {
    * @returns {Object} Дані для оплати
    */
   async createPayment(userId, amount = null) {
-    const paymentAmount = amount || config.payment.amount * 100; // В копійках
+    const paymentAmountInHryvnias = amount || config.payment.amount;
     
     const orderReference = `creative_${userId}_${Date.now()}`;
     const orderDate = Math.floor(Date.now() / 1000);
@@ -20,12 +20,12 @@ export class PaymentService {
       merchantDomainName: config.payment.merchantDomainName,
       orderReference: orderReference,
       orderDate: orderDate,
-      amount: paymentAmount,
+      amount: paymentAmountInHryvnias, // В гривнях для Create Invoice API
       currency: config.payment.currency,
       // Використовуємо латиницю для тестування (кирилиця може викликати проблеми з підписом)
       productName: [process.env.WAYFORPAY_PRODUCT_NAME || 'Generation of creative for Instagram'],
       productCount: [1], // Кількість товарів (завжди 1)
-      productPrice: [paymentAmount], // Ціна в копійках
+      productPrice: [paymentAmountInHryvnias], // Ціна в гривнях для Create Invoice API
       returnUrl: `${process.env.APP_URL || 'https://your-app.com'}/payment/callback`,
       serviceUrl: `${process.env.APP_URL || 'https://your-app.com'}/payment/webhook`,
     };
@@ -112,7 +112,7 @@ export class PaymentService {
     const useWidget = process.env.WAYFORPAY_USE_WIDGET === 'true';
     
     if (useWidget) {
-      return this.createPaymentViaWidget(requestData, orderReference, paymentAmount);
+      return this.createPaymentViaWidget(requestData, orderReference, paymentAmountInKopecks);
     }
 
     try {
@@ -152,14 +152,14 @@ export class PaymentService {
           return {
             orderId: orderReference,
             checkoutUrl: response.data.invoiceUrl,
-            amount: paymentAmount / 100,
+            amount: paymentAmountInHryvnias,
           };
         } else if (response.data.url) {
           console.log('[WayForPay] Success - url found');
           return {
             orderId: orderReference,
             checkoutUrl: response.data.url,
-            amount: paymentAmount / 100,
+            amount: paymentAmountInHryvnias,
           };
         } else if (response.data.errorCode) {
           console.error('[WayForPay] Error response:', response.data);
@@ -198,7 +198,7 @@ export class PaymentService {
                         return {
                           orderId: orderReference,
                           checkoutUrl: retryResponse.data.invoiceUrl || retryResponse.data.url,
-                          amount: paymentAmount / 100,
+                          amount: paymentAmountInHryvnias,
                         };
                       } else if (retryResponse.data && retryResponse.data.reasonCode === 1113) {
                         console.warn('[WayForPay] MERCHANT PASSWORD also returned invalid signature');
@@ -234,7 +234,7 @@ export class PaymentService {
                         return {
                           orderId: orderReference,
                           checkoutUrl: retryResponse.data.invoiceUrl || retryResponse.data.url,
-                          amount: paymentAmount / 100,
+                          amount: paymentAmountInHryvnias,
                         };
                       } else if (retryResponse.data && retryResponse.data.reasonCode === 1113) {
                         console.warn('[WayForPay] SECRET KEY also returned invalid signature');
@@ -269,7 +269,7 @@ export class PaymentService {
                       return {
                         orderId: orderReference,
                         checkoutUrl: hmacResponse.data.invoiceUrl || hmacResponse.data.url,
-                        amount: paymentAmount / 100,
+                        amount: paymentAmountInHryvnias,
                       };
                     }
                   } catch (hmacError) {
@@ -279,13 +279,13 @@ export class PaymentService {
                 
                 // Якщо всі спроби не вдалися, спробуємо widget
                 console.warn('[WayForPay] All API attempts failed, trying widget method as fallback...');
-                return this.createPaymentViaWidget(requestData, orderReference, paymentAmount);
+                return this.createPaymentViaWidget(requestData, orderReference, paymentAmountInKopecks);
               } else {
                 console.error('[WayForPay] Unexpected response format:', response.data);
                 // Якщо це помилка підпису, спробуємо widget
                 if (response.data.reasonCode === 1113) {
                   console.warn('[WayForPay] Trying widget method as fallback...');
-                  return this.createPaymentViaWidget(requestData, orderReference, paymentAmount);
+                  return this.createPaymentViaWidget(requestData, orderReference, paymentAmountInKopecks);
                 }
                 throw new Error(`WayForPay повернув неочікуваний формат відповіді: ${JSON.stringify(response.data)}`);
               }
@@ -311,7 +311,7 @@ export class PaymentService {
           if (error.response.data.reasonCode === 1113 || error.response.data.reason === 'Invalid signature') {
             console.warn('[WayForPay] Invalid signature error, trying widget method...');
             try {
-              return this.createPaymentViaWidget(requestData, orderReference, paymentAmount);
+              return this.createPaymentViaWidget(requestData, orderReference, paymentAmountInKopecks);
             } catch (widgetError) {
               console.error('[WayForPay] Widget method also failed:', widgetError);
             }
@@ -483,7 +483,7 @@ export class PaymentService {
     return {
       orderId: orderReference,
       checkoutUrl: formUrl,
-      amount: paymentAmount / 100,
+      amount: paymentAmount / 100, // paymentAmount вже в копійках, конвертуємо в гривні
     };
   }
 
