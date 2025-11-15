@@ -204,10 +204,14 @@ bot.on('photo', async (ctx) => {
     const user = await db.getUserByTelegramId(ctx.from.id);
     const freeGenerationsUsed = user?.free_generations_used || 0;
     const canGenerateFree = freeGenerationsUsed < config.app.freeGenerations;
+    
+    // Перевіряємо, чи є у користувача оплачені генерації
+    const hasPaidGenerations = await db.hasCompletedPayments(ctx.from.id);
 
-    console.log(`[photo] User ${ctx.from.id}, free generations used: ${freeGenerationsUsed}/${config.app.freeGenerations}, can generate free: ${canGenerateFree}`);
+    console.log(`[photo] User ${ctx.from.id}, free generations used: ${freeGenerationsUsed}/${config.app.freeGenerations}, can generate free: ${canGenerateFree}, has paid: ${hasPaidGenerations}`);
 
-    if (!canGenerateFree) {
+    // Якщо немає безкоштовних генерацій І немає оплачених - потрібна оплата
+    if (!canGenerateFree && !hasPaidGenerations) {
       // Потрібна оплата - показуємо кнопку одразу
       try {
         const payment = await paymentService.createPayment(ctx.from.id);
@@ -326,10 +330,14 @@ bot.on('text', async (ctx) => {
     const user = await db.getUserByTelegramId(ctx.from.id);
     const freeGenerationsUsed = user?.free_generations_used || 0;
     const canGenerateFree = freeGenerationsUsed < config.app.freeGenerations;
+    
+    // Перевіряємо, чи є у користувача оплачені генерації
+    const hasPaidGenerations = await db.hasCompletedPayments(ctx.from.id);
 
-    console.log(`[text] User ${ctx.from.id}, free generations used: ${freeGenerationsUsed}/${config.app.freeGenerations}, can generate free: ${canGenerateFree}`);
+    console.log(`[text] User ${ctx.from.id}, free generations used: ${freeGenerationsUsed}/${config.app.freeGenerations}, can generate free: ${canGenerateFree}, has paid: ${hasPaidGenerations}`);
 
-    if (!canGenerateFree) {
+    // Якщо немає безкоштовних генерацій І немає оплачених - потрібна оплата
+    if (!canGenerateFree && !hasPaidGenerations) {
       // Потрібна оплата - показуємо кнопку одразу
       try {
         const payment = await paymentService.createPayment(ctx.from.id);
@@ -724,7 +732,16 @@ webhookApp.post('/payment/webhook', async (req, res) => {
     // Оновлюємо статус платежу в БД
     // paymentId = orderReference (це унікальний ID платежу)
     const paymentId = orderReference;
-    const status = transactionStatus === 'Approved' ? 'completed' : 'pending';
+    
+    // Визначаємо статус на основі transactionStatus
+    let status = 'pending';
+    if (transactionStatus === 'Approved') {
+      status = 'completed';
+    } else if (transactionStatus === 'Refunded') {
+      status = 'refunded';
+    } else if (transactionStatus === 'Declined' || transactionStatus === 'Expired') {
+      status = 'failed';
+    }
     
     // Витягуємо userId з orderReference для створення платежу, якщо його немає
     let userId = null;

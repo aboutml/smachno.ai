@@ -256,6 +256,7 @@ export class Database {
       console.log(`[updatePaymentStatus] Created new payment record for ${paymentId}`);
       
       // Якщо платіж створюється зі статусом completed, оновлюємо total_paid
+      // Рефанди не рахуються як оплата, тому не збільшуємо total_paid
       if (status === 'completed' && newPayment) {
         const userIdToUpdate = newPayment.user_id;
         const paymentAmount = newPayment.amount || amount || 0;
@@ -264,6 +265,8 @@ export class Database {
           console.log(`[updatePaymentStatus] Incrementing total_paid for user ${userIdToUpdate} by ${paymentAmount} (new payment)`);
           await this.incrementUserTotalPaid(userIdToUpdate, paymentAmount);
         }
+      } else if (status === 'refunded') {
+        console.log(`[updatePaymentStatus] Payment ${paymentId} created with refunded status - not incrementing total_paid`);
       }
       
       return newPayment;
@@ -290,23 +293,35 @@ export class Database {
     
     console.log(`[updatePaymentStatus] Updated payment ${paymentId} to status ${status} (was: ${oldStatus || 'new'})`);
     
-    // Якщо платіж успішний (completed), оновлюємо total_paid користувача
-    // Перевіряємо, чи платіж не був вже completed (щоб не додавати суму двічі)
+    const paymentToUse = data || existingPayment;
+    if (!paymentToUse) {
+      return data;
+    }
+    
+    const userIdToUpdate = paymentToUse.user_id;
+    const paymentAmount = paymentToUse.amount || amount || 0;
+    
+    // Обробка різних статусів платежу
     if (status === 'completed' && oldStatus !== 'completed') {
-      const paymentToUse = data || existingPayment;
-      if (paymentToUse) {
-        const userIdToUpdate = paymentToUse.user_id;
-        const paymentAmount = paymentToUse.amount || amount || 0;
-        
-        if (userIdToUpdate && paymentAmount > 0) {
-          console.log(`[updatePaymentStatus] Incrementing total_paid for user ${userIdToUpdate} by ${paymentAmount}`);
-          await this.incrementUserTotalPaid(userIdToUpdate, paymentAmount);
-        } else {
-          console.warn(`[updatePaymentStatus] Cannot increment total_paid: userId=${userIdToUpdate}, amount=${paymentAmount}`);
-        }
+      // Платіж став успішним - збільшуємо total_paid
+      if (userIdToUpdate && paymentAmount > 0) {
+        console.log(`[updatePaymentStatus] Incrementing total_paid for user ${userIdToUpdate} by ${paymentAmount}`);
+        await this.incrementUserTotalPaid(userIdToUpdate, paymentAmount);
+      } else {
+        console.warn(`[updatePaymentStatus] Cannot increment total_paid: userId=${userIdToUpdate}, amount=${paymentAmount}`);
+      }
+    } else if (status === 'refunded' && oldStatus === 'completed') {
+      // Платіж був успішним, але тепер рефанд - зменшуємо total_paid
+      if (userIdToUpdate && paymentAmount > 0) {
+        console.log(`[updatePaymentStatus] Decrementing total_paid for user ${userIdToUpdate} by ${paymentAmount} (refund)`);
+        await this.decrementUserTotalPaid(userIdToUpdate, paymentAmount);
+      } else {
+        console.warn(`[updatePaymentStatus] Cannot decrement total_paid: userId=${userIdToUpdate}, amount=${paymentAmount}`);
       }
     } else if (status === 'completed' && oldStatus === 'completed') {
       console.log(`[updatePaymentStatus] Payment ${paymentId} was already completed, skipping total_paid update`);
+    } else if (status === 'refunded' && oldStatus === 'refunded') {
+      console.log(`[updatePaymentStatus] Payment ${paymentId} was already refunded, skipping total_paid update`);
     }
     
     return data;
@@ -348,6 +363,78 @@ export class Database {
       }
     } catch (error) {
       console.error('[incrementUserTotalPaid] Exception:', error);
+    }
+  }
+
+  /**
+   * Зменшує total_paid користувача на вказану суму (для рефандів)
+   */
+  async decrementUserTotalPaid(userId, amount) {
+    try {
+      // Спочатку отримуємо поточне значення total_paid
+      const { data: user, error: getUserError } = await supabase
+        .from('users')
+        .select('total_paid')
+        .eq('id', userId)
+        .single();
+
+      if (getUserError) {
+        console.error('[decrementUserTotalPaid] Error getting user:', getUserError);
+        return;
+      }
+
+      const currentTotalPaid = user?.total_paid || 0;
+      const newTotalPaid = Math.max(0, currentTotalPaid - (amount || 0)); // Не дозволяємо від'ємні значення
+
+      // Оновлюємо total_paid
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({
+          total_paid: newTotalPaid,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', userId);
+
+      if (updateError) {
+        console.error('[decrementUserTotalPaid] Error updating total_paid:', updateError);
+      } else {
+        console.log(`[decrementUserTotalPaid] Updated user ${userId} total_paid: ${currentTotalPaid} -> ${newTotalPaid} (-${amount})`);
+      }
+    } catch (error) {
+      console.error('[decrementUserTotalPaid] Exception:', error);
+    }
+  }
+
+  /**
+   * Перевіряє, чи є у користувача успішні платежі (оплачені генерації)
+   * @param {number} telegramId - Telegram ID користувача
+   * @returns {boolean} - true, якщо є хоча б один успішний платіж
+   */
+  async hasCompletedPayments(telegramId) {
+    try {
+      // Спочатку знаходимо користувача
+      const user = await this.getUserByTelegramId(telegramId);
+      if (!user) {
+        return false;
+      }
+
+      // Перевіряємо, чи є успішні платежі
+      const { data: payments, error } = await supabase
+        .from('payments')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('status', 'completed')
+        .limit(1);
+
+      if (error) {
+        console.error('[hasCompletedPayments] Error checking payments:', error);
+        return false;
+      }
+
+      return payments && payments.length > 0;
+    } catch (error) {
+      console.error('[hasCompletedPayments] Exception:', error);
+      return false;
     }
   }
 
