@@ -572,9 +572,45 @@ webhookApp.post('/payment/webhook', async (req, res) => {
       query: req.query,
     });
     
-    // WayForPay може надсилати дані як JSON, так і form-urlencoded
-    // Перевіряємо обидва формати
-    const bodyData = req.body || {};
+    // WayForPay надсилає дані в особливому форматі:
+    // JSON рядок як ключ об'єкта в form-urlencoded форматі
+    // Структура: { '{"merchantAccount":"...",...}': { '{"name":"...","price":...}': '' } }
+    let bodyData = {};
+    
+    if (req.body && typeof req.body === 'object') {
+      // Отримуємо всі ключі body
+      const bodyKeys = Object.keys(req.body);
+      
+      if (bodyKeys.length > 0) {
+        try {
+          // Перший ключ - це JSON з основними даними
+          const mainDataKey = bodyKeys[0];
+          const mainData = JSON.parse(mainDataKey);
+          
+          // Якщо є вкладені дані (products), об'єднуємо їх
+          if (req.body[mainDataKey] && typeof req.body[mainDataKey] === 'object') {
+            const nestedKeys = Object.keys(req.body[mainDataKey]);
+            if (nestedKeys.length > 0) {
+              try {
+                const productsData = JSON.parse(nestedKeys[0]);
+                mainData.products = [productsData];
+              } catch (e) {
+                console.warn('[payment/webhook] Could not parse products data:', e.message);
+              }
+            }
+          }
+          
+          bodyData = mainData;
+          console.log('[payment/webhook] Parsed body data:', bodyData);
+        } catch (error) {
+          console.error('[payment/webhook] Error parsing WayForPay body format:', error);
+          // Спробуємо використати body як є (якщо це стандартний формат)
+          bodyData = req.body;
+        }
+      } else {
+        bodyData = req.body;
+      }
+    }
     
     const {
       merchantAccount,
