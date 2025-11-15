@@ -87,9 +87,20 @@ export class PaymentService {
     }
 
     // Створюємо підпис для WayForPay (БЕЗ returnUrl та serviceUrl)
-    // Спробуємо використати MERCHANT PASSWORD, якщо він є
-    const secretKeyToUse = config.payment.wayForPayMerchantPassword || config.payment.wayForPaySecretKey;
-    const signature = this.createWayForPaySignature(requestData, secretKeyToUse);
+    // Для API спробуємо використати SECRET KEY (40 символів), для widget - MERCHANT PASSWORD (32 символи)
+    // Спочатку спробуємо SECRET KEY для API (оскільки він стандартний 40 символів)
+    let secretKeyToUse = config.payment.wayForPaySecretKey || config.payment.wayForPayMerchantPassword;
+    
+    // Якщо є обидва ключі, спробуємо спочатку SECRET KEY для API (оскільки він стандартний 40 символів)
+    if (config.payment.wayForPaySecretKey && config.payment.wayForPaySecretKey.length === 40) {
+      console.log('[WayForPay] Використовуємо SECRET KEY (40 символів) для API');
+      secretKeyToUse = config.payment.wayForPaySecretKey;
+    } else if (config.payment.wayForPayMerchantPassword) {
+      console.log('[WayForPay] Використовуємо MERCHANT PASSWORD (32 символи) для API');
+      secretKeyToUse = config.payment.wayForPayMerchantPassword;
+    }
+    
+    const signature = this.createWayForPaySignature(requestData, secretKeyToUse, false);
     requestData.merchantSignature = signature;
     
     console.log('[WayForPay] Merchant Account:', config.payment.wayForPayMerchantAccount);
@@ -153,19 +164,58 @@ export class PaymentService {
         } else if (response.data.errorCode) {
           console.error('[WayForPay] Error response:', response.data);
           throw new Error(`WayForPay помилка: ${response.data.reason || response.data.errorMessage || 'Невідома помилка'}`);
-        } else if (response.data.reasonCode === 1113) {
-          // Invalid signature - спробуємо використати widget
-          console.warn('[WayForPay] API returned invalid signature, trying widget method...');
-          return this.createPaymentViaWidget(requestData, orderReference, paymentAmount);
-        } else {
-          console.error('[WayForPay] Unexpected response format:', response.data);
-          // Якщо це помилка підпису, спробуємо widget
-          if (response.data.reasonCode === 1113) {
-            console.warn('[WayForPay] Trying widget method as fallback...');
-            return this.createPaymentViaWidget(requestData, orderReference, paymentAmount);
-          }
-          throw new Error(`WayForPay повернув неочікуваний формат відповіді: ${JSON.stringify(response.data)}`);
-        }
+              } else if (response.data.reasonCode === 1113) {
+                // Invalid signature - спробуємо використати інший ключ або widget
+                console.warn('[WayForPay] API returned invalid signature (reasonCode: 1113)');
+                
+                // Спробуємо використати інший ключ, якщо є обидва
+                if (config.payment.wayForPaySecretKey && config.payment.wayForPayMerchantPassword && secretKeyToUse === config.payment.wayForPayMerchantPassword) {
+                  console.log('[WayForPay] Спробуємо використати SECRET KEY замість MERCHANT PASSWORD');
+                  const alternativeKey = config.payment.wayForPaySecretKey;
+                  const alternativeSignature = this.createWayForPaySignature(requestData, alternativeKey, false);
+                  requestData.merchantSignature = alternativeSignature;
+                  
+                  // Повторний запит з альтернативним ключем
+                  const retryPayload = {
+                    ...requestPayload,
+                    merchantSignature: alternativeSignature,
+                  };
+                  
+                  try {
+                    const retryResponse = await axios.post(
+                      'https://api.wayforpay.com/api',
+                      retryPayload,
+                      {
+                        headers: { 'Content-Type': 'application/json' },
+                        timeout: 10000,
+                      }
+                    );
+                    
+                    if (retryResponse.data && (retryResponse.data.invoiceUrl || retryResponse.data.url)) {
+                      console.log('[WayForPay] Success with alternative key (SECRET KEY)');
+                      return {
+                        orderId: orderReference,
+                        checkoutUrl: retryResponse.data.invoiceUrl || retryResponse.data.url,
+                        amount: paymentAmount / 100,
+                      };
+                    }
+                  } catch (retryError) {
+                    console.error('[WayForPay] Retry with alternative key also failed:', retryError.message);
+                  }
+                }
+                
+                // Якщо альтернативний ключ не допоміг, спробуємо widget
+                console.warn('[WayForPay] Trying widget method as fallback...');
+                return this.createPaymentViaWidget(requestData, orderReference, paymentAmount);
+              } else {
+                console.error('[WayForPay] Unexpected response format:', response.data);
+                // Якщо це помилка підпису, спробуємо widget
+                if (response.data.reasonCode === 1113) {
+                  console.warn('[WayForPay] Trying widget method as fallback...');
+                  return this.createPaymentViaWidget(requestData, orderReference, paymentAmount);
+                }
+                throw new Error(`WayForPay повернув неочікуваний формат відповіді: ${JSON.stringify(response.data)}`);
+              }
       }
       
       throw new Error('Invalid response from WayForPay - response.data is empty');
@@ -270,10 +320,31 @@ export class PaymentService {
       console.warn(`[WayForPay] ⚠️ Secret key має нестандартну довжину: ${secretKey.length} (очікується 40)`);
     }
     
-    const signature = crypto
+    // WayForPay може використовувати або HMAC-MD5, або простий MD5
+    // Спробуємо обидва варіанти для діагностики
+    // Згідно з документацією, для Create Invoice використовується простий MD5
+    // Але деякі операції використовують HMAC-MD5
+    
+    // Спочатку спробуємо простий MD5 (це стандарт для Create Invoice)
+    const simpleMd5Signature = crypto
       .createHash('md5')
       .update(signatureString + secretKey)
       .digest('hex');
+    
+    // Також створимо HMAC-MD5 для порівняння
+    const hmacSignature = crypto
+      .createHmac('md5', secretKey)
+      .update(signatureString)
+      .digest('hex');
+    
+    // Використовуємо простий MD5 (це стандарт для Create Invoice API)
+    // Якщо не працює, можна спробувати HMAC-MD5 через змінну оточення
+    const useHmac = process.env.WAYFORPAY_USE_HMAC === 'true';
+    const signature = useHmac ? hmacSignature : simpleMd5Signature;
+    
+    console.log('[WayForPay] Using signature method:', useHmac ? 'HMAC-MD5' : 'Simple MD5 (standard for Create Invoice)');
+    console.log('[WayForPay] Simple MD5 signature:', simpleMd5Signature);
+    console.log('[WayForPay] HMAC-MD5 signature (alternative):', hmacSignature);
     
     console.log('[WayForPay] Calculated signature:', signature);
     console.log('[WayForPay] Full signature string (with key):', signatureString + '[' + secretKey.substring(0, 4) + '...]');
@@ -295,12 +366,18 @@ export class PaymentService {
         data.serviceUrl || '',
       ].join(';');
       
-      const signature2 = crypto
+      const signature2Hmac = crypto
+        .createHmac('md5', secretKey)
+        .update(signatureString2)
+        .digest('hex');
+      
+      const signature2Simple = crypto
         .createHash('md5')
         .update(signatureString2 + secretKey)
         .digest('hex');
       
-      console.log('[WayForPay] DEBUG: Alternative signature (with returnUrl/serviceUrl):', signature2);
+      console.log('[WayForPay] DEBUG: Alternative signature (with returnUrl/serviceUrl) - HMAC-MD5:', signature2Hmac);
+      console.log('[WayForPay] DEBUG: Alternative signature (with returnUrl/serviceUrl) - Simple MD5:', signature2Simple);
       console.log('[WayForPay] DEBUG: Alternative signature string:', signatureString2);
     }
     
@@ -429,9 +506,10 @@ export class PaymentService {
       data.reasonCode,
     ].join(';');
 
+    // WayForPay використовує HMAC-MD5 для верифікації підпису
     const expectedSignature = crypto
-      .createHash('md5')
-      .update(signatureString + secretKey)
+      .createHmac('md5', secretKey)
+      .update(signatureString)
       .digest('hex');
 
     return expectedSignature === signature;
