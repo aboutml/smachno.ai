@@ -406,35 +406,78 @@ export class Database {
   }
 
   /**
-   * Перевіряє, чи є у користувача успішні платежі (оплачені генерації)
+   * Отримує кількість доступних оплачених генерацій для користувача
    * @param {number} telegramId - Telegram ID користувача
-   * @returns {boolean} - true, якщо є хоча б один успішний платіж
+   * @returns {number} - кількість доступних оплачених генерацій
    */
-  async hasCompletedPayments(telegramId) {
+  async getAvailablePaidGenerations(telegramId) {
     try {
       // Спочатку знаходимо користувача
       const user = await this.getUserByTelegramId(telegramId);
       if (!user) {
-        return false;
+        return 0;
       }
 
-      // Перевіряємо, чи є успішні платежі
+      // Рахуємо кількість успішних платежів
       const { data: payments, error } = await supabase
         .from('payments')
         .select('id')
         .eq('user_id', user.id)
-        .eq('status', 'completed')
-        .limit(1);
+        .eq('status', 'completed');
 
       if (error) {
-        console.error('[hasCompletedPayments] Error checking payments:', error);
-        return false;
+        console.error('[getAvailablePaidGenerations] Error checking payments:', error);
+        return 0;
       }
 
-      return payments && payments.length > 0;
+      const completedPaymentsCount = payments?.length || 0;
+      const paidGenerationsUsed = user.paid_generations_used || 0;
+      
+      // Використовуємо config для отримання кількості генерацій за оплату
+      const paidGenerationsPerPayment = config.app.paidGenerationsPerPayment || 2;
+      
+      const totalPaidGenerationsAvailable = completedPaymentsCount * paidGenerationsPerPayment;
+      const availablePaidGenerations = Math.max(0, totalPaidGenerationsAvailable - paidGenerationsUsed);
+      
+      console.log(`[getAvailablePaidGenerations] User ${telegramId}: completed payments: ${completedPaymentsCount}, used: ${paidGenerationsUsed}, available: ${availablePaidGenerations}`);
+      
+      return availablePaidGenerations;
     } catch (error) {
-      console.error('[hasCompletedPayments] Exception:', error);
-      return false;
+      console.error('[getAvailablePaidGenerations] Exception:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Збільшує лічильник використаних оплачених генерацій
+   * @param {number} telegramId - Telegram ID користувача
+   */
+  async incrementPaidGenerations(telegramId) {
+    try {
+      const user = await this.getUserByTelegramId(telegramId);
+      if (!user) {
+        console.error('[incrementPaidGenerations] User not found');
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('users')
+        .update({
+          paid_generations_used: (user.paid_generations_used || 0) + 1,
+          total_generations: (user.total_generations || 0) + 1,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('telegram_id', telegramId)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('[incrementPaidGenerations] Error updating user:', error);
+      } else {
+        console.log(`[incrementPaidGenerations] Updated paid_generations_used for user ${telegramId}: ${user.paid_generations_used || 0} -> ${data.paid_generations_used}`);
+      }
+    } catch (error) {
+      console.error('[incrementPaidGenerations] Exception:', error);
     }
   }
 

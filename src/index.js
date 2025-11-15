@@ -205,13 +205,13 @@ bot.on('photo', async (ctx) => {
     const freeGenerationsUsed = user?.free_generations_used || 0;
     const canGenerateFree = freeGenerationsUsed < config.app.freeGenerations;
     
-    // Перевіряємо, чи є у користувача оплачені генерації
-    const hasPaidGenerations = await db.hasCompletedPayments(ctx.from.id);
+    // Перевіряємо, скільки оплачених генерацій доступно
+    const availablePaidGenerations = await db.getAvailablePaidGenerations(ctx.from.id);
 
-    console.log(`[photo] User ${ctx.from.id}, free generations used: ${freeGenerationsUsed}/${config.app.freeGenerations}, can generate free: ${canGenerateFree}, has paid: ${hasPaidGenerations}`);
+    console.log(`[photo] User ${ctx.from.id}, free generations used: ${freeGenerationsUsed}/${config.app.freeGenerations}, can generate free: ${canGenerateFree}, available paid: ${availablePaidGenerations}`);
 
-    // Якщо немає безкоштовних генерацій І немає оплачених - потрібна оплата
-    if (!canGenerateFree && !hasPaidGenerations) {
+    // Якщо немає безкоштовних генерацій І немає доступних оплачених - потрібна оплата
+    if (!canGenerateFree && availablePaidGenerations === 0) {
       // Потрібна оплата - показуємо кнопку одразу
       try {
         const payment = await paymentService.createPayment(ctx.from.id);
@@ -296,20 +296,43 @@ bot.on('photo', async (ctx) => {
       });
     }
 
-    // Оновлюємо лічильник безкоштовних генерацій
-    await db.incrementFreeGenerations(ctx.from.id);
-
-    const remainingFree = config.app.freeGenerations - ((user?.free_generations_used || 0) + 1);
-    if (remainingFree > 0) {
-      await ctx.reply(
-        `🎁 Залишилось безкоштовних генерацій: ${remainingFree}\n\n` +
-        `Після вичерпання безкоштовних генерацій кожна наступна коштуватиме ${config.payment.amount} грн.`
-      );
+    // Визначаємо, чи це безкоштовна чи оплачена генерація
+    const isFreeGeneration = canGenerateFree;
+    
+    if (isFreeGeneration) {
+      // Оновлюємо лічильник безкоштовних генерацій
+      await db.incrementFreeGenerations(ctx.from.id);
+      
+      const remainingFree = config.app.freeGenerations - ((user?.free_generations_used || 0) + 1);
+      if (remainingFree > 0) {
+        await ctx.reply(
+          `🎁 Залишилось безкоштовних генерацій: ${remainingFree}\n\n` +
+          `Після вичерпання безкоштовних генерацій кожна наступна коштуватиме ${config.payment.amount} грн (${config.app.paidGenerationsPerPayment} генерації).`
+        );
+      } else {
+        await ctx.reply(
+          `💳 Безкоштовні генерації вичерпано.\n\n` +
+          `Наступні креативи коштуватимуть ${config.payment.amount} грн (${config.app.paidGenerationsPerPayment} генерації за оплату).`
+        );
+      }
     } else {
-      await ctx.reply(
-        `💳 Безкоштовні генерації вичерпано.\n\n` +
-        `Наступні креативи коштуватимуть ${config.payment.amount} грн.`
-      );
+      // Оновлюємо лічильник оплачених генерацій
+      await db.incrementPaidGenerations(ctx.from.id);
+      
+      // Отримуємо оновлену кількість доступних оплачених генерацій
+      const updatedAvailablePaid = await db.getAvailablePaidGenerations(ctx.from.id);
+      
+      if (updatedAvailablePaid > 0) {
+        await ctx.reply(
+          `💳 Використано 1 оплачену генерацію.\n\n` +
+          `Залишилось оплачених генерацій: ${updatedAvailablePaid}`
+        );
+      } else {
+        await ctx.reply(
+          `💳 Використано останню оплачену генерацію.\n\n` +
+          `Для наступних креативів потрібна оплата ${config.payment.amount} грн (${config.app.paidGenerationsPerPayment} генерації).`
+        );
+      }
     }
 
   } catch (error) {
@@ -331,13 +354,13 @@ bot.on('text', async (ctx) => {
     const freeGenerationsUsed = user?.free_generations_used || 0;
     const canGenerateFree = freeGenerationsUsed < config.app.freeGenerations;
     
-    // Перевіряємо, чи є у користувача оплачені генерації
-    const hasPaidGenerations = await db.hasCompletedPayments(ctx.from.id);
+    // Перевіряємо, скільки оплачених генерацій доступно
+    const availablePaidGenerations = await db.getAvailablePaidGenerations(ctx.from.id);
 
-    console.log(`[text] User ${ctx.from.id}, free generations used: ${freeGenerationsUsed}/${config.app.freeGenerations}, can generate free: ${canGenerateFree}, has paid: ${hasPaidGenerations}`);
+    console.log(`[text] User ${ctx.from.id}, free generations used: ${freeGenerationsUsed}/${config.app.freeGenerations}, can generate free: ${canGenerateFree}, available paid: ${availablePaidGenerations}`);
 
-    // Якщо немає безкоштовних генерацій І немає оплачених - потрібна оплата
-    if (!canGenerateFree && !hasPaidGenerations) {
+    // Якщо немає безкоштовних генерацій І немає доступних оплачених - потрібна оплата
+    if (!canGenerateFree && availablePaidGenerations === 0) {
       // Потрібна оплата - показуємо кнопку одразу
       try {
         const payment = await paymentService.createPayment(ctx.from.id);
@@ -410,19 +433,42 @@ bot.on('text', async (ctx) => {
       });
     }
 
-    // Оновлюємо лічильник
-    await db.incrementFreeGenerations(ctx.from.id);
-
-    const remainingFree = config.app.freeGenerations - ((user?.free_generations_used || 0) + 1);
-    if (remainingFree > 0) {
-      await ctx.reply(
-        `🎁 Залишилось безкоштовних генерацій: ${remainingFree}`
-      );
+    // Визначаємо, чи це безкоштовна чи оплачена генерація
+    const isFreeGeneration = canGenerateFree;
+    
+    if (isFreeGeneration) {
+      // Оновлюємо лічильник безкоштовних генерацій
+      await db.incrementFreeGenerations(ctx.from.id);
+      
+      const remainingFree = config.app.freeGenerations - ((user?.free_generations_used || 0) + 1);
+      if (remainingFree > 0) {
+        await ctx.reply(
+          `🎁 Залишилось безкоштовних генерацій: ${remainingFree}`
+        );
+      } else {
+        await ctx.reply(
+          `💳 Безкоштовні генерації вичерпано.\n\n` +
+          `Наступні креативи коштуватимуть ${config.payment.amount} грн (${config.app.paidGenerationsPerPayment} генерації за оплату).`
+        );
+      }
     } else {
-      await ctx.reply(
-        `💳 Безкоштовні генерації вичерпано.\n\n` +
-        `Наступні креативи коштуватимуть ${config.payment.amount} грн.`
-      );
+      // Оновлюємо лічильник оплачених генерацій
+      await db.incrementPaidGenerations(ctx.from.id);
+      
+      // Отримуємо оновлену кількість доступних оплачених генерацій
+      const updatedAvailablePaid = await db.getAvailablePaidGenerations(ctx.from.id);
+      
+      if (updatedAvailablePaid > 0) {
+        await ctx.reply(
+          `💳 Використано 1 оплачену генерацію.\n\n` +
+          `Залишилось оплачених генерацій: ${updatedAvailablePaid}`
+        );
+      } else {
+        await ctx.reply(
+          `💳 Використано останню оплачену генерацію.\n\n` +
+          `Для наступних креативів потрібна оплата ${config.payment.amount} грн (${config.app.paidGenerationsPerPayment} генерації).`
+        );
+      }
     }
 
   } catch (error) {

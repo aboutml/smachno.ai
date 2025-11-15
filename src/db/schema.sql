@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW(),
   free_generations_used INTEGER DEFAULT 0,
+  paid_generations_used INTEGER DEFAULT 0,
   total_generations INTEGER DEFAULT 0,
   total_paid INTEGER DEFAULT 0
 );

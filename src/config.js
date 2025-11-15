@@ -28,6 +28,7 @@ export const config = {
     nodeEnv: process.env.NODE_ENV || 'development',
     port: parseInt(process.env.PORT || '3000'),
     freeGenerations: 2, // Кількість безкоштовних генерацій
+    paidGenerationsPerPayment: 2, // Кількість генерацій за одну оплату
   },
 };
 
