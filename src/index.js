@@ -722,11 +722,21 @@ webhookApp.post('/payment/webhook', async (req, res) => {
     }
 
     // Оновлюємо статус платежу в БД
-    const paymentId = reasonCode || orderReference;
+    // paymentId = orderReference (це унікальний ID платежу)
+    const paymentId = orderReference;
     const status = transactionStatus === 'Approved' ? 'completed' : 'pending';
     
+    // Витягуємо userId з orderReference для створення платежу, якщо його немає
+    let userId = null;
+    const match = orderReference.match(/creative_(\d+)_/);
+    if (match) {
+      userId = parseInt(match[1]);
+    }
+    
     if (paymentId) {
-      await db.updatePaymentStatus(paymentId, status);
+      // amount приходить в гривнях від WayForPay, конвертуємо в копійки для БД
+      const amountInKopecks = Math.round((amount || 0) * 100);
+      await db.updatePaymentStatus(paymentId, status, userId, amountInKopecks, currency);
     }
 
     // Якщо платіж успішний, повідомляємо користувача

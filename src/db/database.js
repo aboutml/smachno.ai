@@ -153,7 +153,61 @@ export class Database {
     return data;
   }
 
-  async updatePaymentStatus(paymentId, status) {
+  async updatePaymentStatus(paymentId, status, userId = null, amount = null, currency = null) {
+    // Спочатку перевіряємо, чи існує платіж
+    const { data: existingPayment, error: checkError } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('payment_id', paymentId)
+      .maybeSingle();
+
+    if (checkError) {
+      console.error('Error checking payment:', checkError);
+    }
+
+    // Якщо платіж не існує, створюємо його (upsert)
+    if (!existingPayment) {
+      console.log(`[updatePaymentStatus] Payment ${paymentId} not found, creating new payment record`);
+      
+      // Якщо userId не передано, намагаємося витягти з paymentId (формат: creative_123456789_timestamp)
+      let extractedUserId = userId;
+      if (!extractedUserId && paymentId && typeof paymentId === 'string') {
+        const match = paymentId.match(/creative_(\d+)_/);
+        if (match) {
+          extractedUserId = parseInt(match[1]);
+          console.log(`[updatePaymentStatus] Extracted userId ${extractedUserId} from paymentId ${paymentId}`);
+        }
+      }
+
+      if (!extractedUserId) {
+        console.error(`[updatePaymentStatus] Cannot create payment: userId is required but not provided`);
+        return null;
+      }
+
+      // Створюємо новий платіж
+      const { data: newPayment, error: createError } = await supabase
+        .from('payments')
+        .insert({
+          user_id: extractedUserId,
+          amount: amount || 0,
+          currency: currency || 'UAH',
+          payment_id: paymentId,
+          status: status,
+          completed_at: status === 'completed' ? new Date().toISOString() : null,
+        })
+        .select()
+        .single();
+
+      if (createError) {
+        console.error('Error creating payment:', createError);
+        return null;
+      }
+      
+      console.log(`[updatePaymentStatus] Created new payment record for ${paymentId}`);
+      return newPayment;
+    }
+
+    // Якщо платіж існує, оновлюємо його
     const { data, error } = await supabase
       .from('payments')
       .update({
@@ -168,6 +222,8 @@ export class Database {
       console.error('Error updating payment:', error);
       return null;
     }
+    
+    console.log(`[updatePaymentStatus] Updated payment ${paymentId} to status ${status}`);
     return data;
   }
 
