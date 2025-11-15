@@ -574,7 +574,8 @@ webhookApp.post('/payment/webhook', async (req, res) => {
     
     // WayForPay надсилає дані в особливому форматі:
     // JSON рядок як ключ об'єкта в form-urlencoded форматі
-    // Структура: { '{"merchantAccount":"...",...}': { '{"name":"...","price":...}': '' } }
+    // JSON обрізається на "products": і products передаються окремо
+    // Структура: { '{"merchantAccount":"...","products":': { '{"name":"...","price":...}': '' } }
     let bodyData = {};
     
     if (req.body && typeof req.body === 'object') {
@@ -583,27 +584,46 @@ webhookApp.post('/payment/webhook', async (req, res) => {
       
       if (bodyKeys.length > 0) {
         try {
-          // Перший ключ - це JSON з основними даними
+          // Перший ключ - це JSON з основними даними (обрізаний на "products":)
           const mainDataKey = bodyKeys[0];
-          const mainData = JSON.parse(mainDataKey);
           
           // Якщо є вкладені дані (products), об'єднуємо їх
+          let productsJson = '';
           if (req.body[mainDataKey] && typeof req.body[mainDataKey] === 'object') {
             const nestedKeys = Object.keys(req.body[mainDataKey]);
             if (nestedKeys.length > 0) {
-              try {
-                const productsData = JSON.parse(nestedKeys[0]);
-                mainData.products = [productsData];
-              } catch (e) {
-                console.warn('[payment/webhook] Could not parse products data:', e.message);
-              }
+              // Products передаються як JSON рядок у вкладеному ключі
+              productsJson = nestedKeys[0];
             }
           }
           
-          bodyData = mainData;
+          // Об'єднуємо обрізаний JSON з products
+          // mainDataKey закінчується на "products":, тому додаємо products масив
+          let fullJsonString = mainDataKey;
+          if (productsJson) {
+            // Видаляємо останній символ ":" з mainDataKey і додаємо products масив
+            fullJsonString = mainDataKey.trim();
+            if (fullJsonString.endsWith(':')) {
+              fullJsonString = fullJsonString.slice(0, -1); // Видаляємо ":"
+            }
+            fullJsonString += `[${productsJson}]}`;
+          } else {
+            // Якщо немає products, просто закриваємо JSON
+            fullJsonString = mainDataKey.trim();
+            if (fullJsonString.endsWith(':')) {
+              fullJsonString = fullJsonString.slice(0, -1) + '[]}';
+            } else if (!fullJsonString.endsWith('}')) {
+              fullJsonString += '}';
+            }
+          }
+          
+          // Парсимо повний JSON
+          bodyData = JSON.parse(fullJsonString);
           console.log('[payment/webhook] Parsed body data:', bodyData);
         } catch (error) {
           console.error('[payment/webhook] Error parsing WayForPay body format:', error);
+          console.error('[payment/webhook] Main data key:', bodyKeys[0]);
+          console.error('[payment/webhook] Nested data:', req.body[bodyKeys[0]]);
           // Спробуємо використати body як є (якщо це стандартний формат)
           bodyData = req.body;
         }
