@@ -543,22 +543,39 @@ bot.hears('❓ Допомога', async (ctx) => {
 // Запускаємо webhook сервер
 const webhookApp = express();
 
+// Спочатку парсимо body, потім логуємо
+webhookApp.use(express.json());
+webhookApp.use(express.urlencoded({ extended: true }));
+
 // Middleware для логування всіх запитів (для діагностики)
+// Розміщуємо ПІСЛЯ парсерів body, щоб бачити розпарсені дані
 webhookApp.use((req, res, next) => {
   console.log(`[Webhook] ${new Date().toISOString()} ${req.method} ${req.path}`, {
     query: req.query,
-    body: req.body ? Object.keys(req.body) : 'no body',
+    body: req.body ? (typeof req.body === 'object' ? Object.keys(req.body) : req.body) : 'no body',
+    contentType: req.headers['content-type'],
     ip: req.ip || req.connection.remoteAddress,
   });
   next();
 });
 
-webhookApp.use(express.json());
-webhookApp.use(express.urlencoded({ extended: true }));
-
 // Webhook endpoint для WayForPay
 webhookApp.post('/payment/webhook', async (req, res) => {
   try {
+    // Логуємо всі дані для діагностики
+    console.log('[payment/webhook] Request received:', {
+      method: req.method,
+      headers: req.headers,
+      contentType: req.headers['content-type'],
+      body: req.body,
+      rawBody: typeof req.body,
+      query: req.query,
+    });
+    
+    // WayForPay може надсилати дані як JSON, так і form-urlencoded
+    // Перевіряємо обидва формати
+    const bodyData = req.body || {};
+    
     const {
       merchantAccount,
       orderReference,
@@ -569,10 +586,33 @@ webhookApp.post('/payment/webhook', async (req, res) => {
       transactionStatus,
       reasonCode,
       merchantSignature,
-    } = req.body;
+    } = bodyData;
 
+    // Перевіряємо наявність обов'язкових полів
+    if (!merchantAccount || !orderReference || !merchantSignature) {
+      console.error('[payment/webhook] Missing required fields:', {
+        hasMerchantAccount: !!merchantAccount,
+        hasOrderReference: !!orderReference,
+        hasMerchantSignature: !!merchantSignature,
+        bodyKeys: Object.keys(bodyData),
+      });
+      return res.status(400).send('Missing required fields');
+    }
+    
+    console.log('[payment/webhook] Processing webhook:', {
+      merchantAccount,
+      orderReference,
+      amount,
+      currency,
+      transactionStatus,
+      reasonCode,
+    });
+    
+    // Спробуємо використати обидва ключі для верифікації
+    const secretKeyToUse = config.payment.wayForPayMerchantPassword || config.payment.wayForPaySecretKey;
+    
     // Перевіряємо підпис
-    const isValid = paymentService.verifyWayForPaySignature(
+    let isValid = paymentService.verifyWayForPaySignature(
       {
         merchantAccount,
         orderReference,
@@ -584,8 +624,30 @@ webhookApp.post('/payment/webhook', async (req, res) => {
         reasonCode: reasonCode || '',
       },
       merchantSignature,
-      config.payment.wayForPaySecretKey
+      secretKeyToUse
     );
+    
+    // Якщо не спрацювало з першим ключем, спробуємо другий
+    if (!isValid && config.payment.wayForPaySecretKey && config.payment.wayForPayMerchantPassword) {
+      console.log('[payment/webhook] Trying alternative key for signature verification');
+      const alternativeKey = secretKeyToUse === config.payment.wayForPaySecretKey 
+        ? config.payment.wayForPayMerchantPassword 
+        : config.payment.wayForPaySecretKey;
+      isValid = paymentService.verifyWayForPaySignature(
+        {
+          merchantAccount,
+          orderReference,
+          amount,
+          currency,
+          authCode: authCode || '',
+          cardPan: cardPan || '',
+          transactionStatus,
+          reasonCode: reasonCode || '',
+        },
+        merchantSignature,
+        alternativeKey
+      );
+    }
 
     if (!isValid) {
       console.error('Invalid WayForPay signature');
