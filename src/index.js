@@ -598,24 +598,35 @@ webhookApp.post('/payment/webhook', async (req, res) => {
           }
           
           // Об'єднуємо обрізаний JSON з products
-          // mainDataKey закінчується на "products":, тому додаємо products масив
-          let fullJsonString = mainDataKey;
+          // mainDataKey закінчується на "products":, тому замінюємо ":" на ":["
+          let fullJsonString = mainDataKey.trim();
+          
           if (productsJson) {
-            // Видаляємо останній символ ":" з mainDataKey і додаємо products масив
-            fullJsonString = mainDataKey.trim();
-            if (fullJsonString.endsWith(':')) {
-              fullJsonString = fullJsonString.slice(0, -1); // Видаляємо ":"
+            // Замінюємо останнє "products": на "products":[
+            if (fullJsonString.endsWith('"products":')) {
+              // Видаляємо ":" і додаємо ":["
+              fullJsonString = fullJsonString.slice(0, -1) + ':[';
+            } else if (fullJsonString.endsWith('"products": ')) {
+              // Видаляємо ": " і додаємо ":["
+              fullJsonString = fullJsonString.slice(0, -2) + ':[';
+            } else if (fullJsonString.endsWith(':')) {
+              // Якщо просто закінчується на ":", замінюємо на ":["
+              fullJsonString = fullJsonString.slice(0, -1) + ':[';
             }
-            fullJsonString += `[${productsJson}]}`;
+            // Додаємо products JSON і закриваємо масив та об'єкт
+            fullJsonString += productsJson + ']}';
           } else {
-            // Якщо немає products, просто закриваємо JSON
-            fullJsonString = mainDataKey.trim();
-            if (fullJsonString.endsWith(':')) {
+            // Якщо немає products, замінюємо ":" на "[]}"
+            if (fullJsonString.endsWith('"products":')) {
+              fullJsonString = fullJsonString.slice(0, -1) + '[]}';
+            } else if (fullJsonString.endsWith(':')) {
               fullJsonString = fullJsonString.slice(0, -1) + '[]}';
             } else if (!fullJsonString.endsWith('}')) {
               fullJsonString += '}';
             }
           }
+          
+          console.log('[payment/webhook] Full JSON string:', fullJsonString.substring(0, 200) + '...');
           
           // Парсимо повний JSON
           bodyData = JSON.parse(fullJsonString);
