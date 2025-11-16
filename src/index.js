@@ -726,136 +726,6 @@ async function processGeneration(ctx, session) {
   }
 }
 
-// Обробка текстового запиту
-bot.on('text', async (ctx) => {
-  // Ігноруємо команди
-  if (ctx.message.text.startsWith('/')) {
-    return;
-  }
-
-  // Ігноруємо кнопки меню - вони обробляються через bot.hears()
-  const menuButtons = [
-    '📸 Згенерувати фото десерту',
-    '💡 Стилі / Пресети',
-    'ℹ️ Про бота',
-    '⚙️ Налаштування',
-    '🔙 Назад',
-    '📸 Мої креативи',
-    '❓ Допомога'
-  ];
-  
-  if (menuButtons.includes(ctx.message.text)) {
-    // Це кнопка меню, не обробляємо тут - обробляється через bot.hears()
-    return;
-  }
-
-  // Перевіряємо, чи це побажання для кастомного стилю
-  const session = userSessions.get(ctx.from.id);
-  if (session && session.style === 'custom' && !session.customWishes) {
-    // Зберігаємо побажання та запускаємо генерацію
-    session.customWishes = ctx.message.text;
-    userSessions.set(ctx.from.id, session);
-    
-    await ctx.reply('Чудово! Починаю генерувати 😋\n\nЦе займе близько 1 хвилини.');
-    await processGeneration(ctx, session);
-    return;
-  }
-
-  // Якщо це не побажання для стилю і не кнопка меню, просимо надіслати фото
-  await ctx.reply('📸 Для генерації потрібно надіслати фото десерту.\n\nНатисни кнопку "📸 Згенерувати фото десерту" або надішли фото напряму.', {
-    reply_markup: {
-      keyboard: [
-        [{ text: '📸 Згенерувати фото десерту' }],
-        [{ text: '💡 Стилі / Пресети' }],
-        [{ text: 'ℹ️ Про бота' }, { text: '⚙️ Налаштування' }]
-      ],
-      resize_keyboard: true,
-    },
-  });
-});
-
-// Обробка помилок
-bot.catch((err, ctx) => {
-  console.error('Error in bot:', err);
-  ctx.reply('❌ Виникла несподівана помилка. Спробуй ще раз пізніше.');
-});
-
-// Налаштування меню команд
-const setupCommands = async () => {
-  try {
-    await bot.telegram.setMyCommands([
-      { command: 'start', description: 'Початок роботи з ботом' },
-      { command: 'my_creatives', description: 'Мої креативи' },
-      { command: 'help', description: 'Допомога та інструкції' },
-    ]);
-    console.log('✅ Меню команд налаштовано');
-  } catch (error) {
-    console.error('⚠️ Помилка налаштування команд:', error);
-  }
-};
-
-// Обробка кнопок меню
-bot.hears('📸 Мої креативи', async (ctx) => {
-  try {
-    // Викликаємо команду /my_creatives
-    const creatives = await db.getUserCreatives(ctx.from.id, 5);
-    console.log(`[button] User ${ctx.from.id}, found ${creatives.length} creatives`);
-
-    const menuKeyboard = {
-      keyboard: [
-        [
-          { text: '📸 Мої креативи' },
-          { text: '❓ Допомога' }
-        ]
-      ],
-      resize_keyboard: true,
-    };
-
-    if (creatives.length === 0) {
-      await ctx.reply('📭 У тебе ще немає створених креативів.\n\nНадішли фото або опиши свій виріб, щоб створити перший креатив!', {
-        reply_markup: menuKeyboard,
-      });
-      return;
-    }
-
-    await ctx.reply(`📸 Твої останні креативи (${creatives.length}):`, {
-      reply_markup: menuKeyboard,
-    });
-
-    for (const creative of creatives) {
-      try {
-        console.log(`[button] Processing creative ${creative.id}, URL: ${creative.generated_image_url}`);
-        
-        if (creative.generated_image_url) {
-          const caption = creative.caption 
-            ? `${creative.caption}\n\n📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}`
-            : `📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}`;
-          
-          console.log(`[button] Sending photo with URL: ${creative.generated_image_url}`);
-          await ctx.replyWithPhoto(creative.generated_image_url, {
-            caption: caption.substring(0, 1024),
-          });
-          console.log(`[button] Successfully sent creative ${creative.id}`);
-        } else {
-          console.warn(`[button] Creative ${creative.id} has no image URL`);
-          await ctx.reply(`📄 Креатив #${creative.id}\n${creative.caption || 'Без опису'}\n📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}`);
-        }
-      } catch (error) {
-        console.error(`[button] Error sending creative ${creative.id}:`, error);
-        console.error(`[button] Error details:`, error.message);
-        try {
-          await ctx.reply(`📄 Креатив #${creative.id}\n${creative.caption || 'Без опису'}\n📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}\n\n⚠️ Не вдалося завантажити зображення`);
-        } catch (e) {
-          console.error(`[button] Failed to send fallback message:`, e);
-        }
-      }
-    }
-  } catch (error) {
-    console.error('[button] Error:', error);
-    await ctx.reply('❌ Виникла помилка при завантаженні креативів. Спробуй ще раз пізніше.');
-  }
-});
-
 // Обробка кнопки "📸 Згенерувати фото десерту"
 bot.hears('📸 Згенерувати фото десерту', async (ctx) => {
   await ctx.reply(
@@ -966,6 +836,120 @@ bot.hears('🔙 Назад', async (ctx) => {
       resize_keyboard: true,
     },
   });
+});
+
+// Обробка текстового запиту (має бути після всіх bot.hears())
+bot.on('text', async (ctx) => {
+  // Ігноруємо команди
+  if (ctx.message.text.startsWith('/')) {
+    return;
+  }
+
+  // Перевіряємо, чи це побажання для кастомного стилю
+  const session = userSessions.get(ctx.from.id);
+  if (session && session.style === 'custom' && !session.customWishes) {
+    // Зберігаємо побажання та запускаємо генерацію
+    session.customWishes = ctx.message.text;
+    userSessions.set(ctx.from.id, session);
+    
+    await ctx.reply('Чудово! Починаю генерувати 😋\n\nЦе займе близько 1 хвилини.');
+    await processGeneration(ctx, session);
+    return;
+  }
+
+  // Якщо це не побажання для стилю, просимо надіслати фото
+  await ctx.reply('📸 Для генерації потрібно надіслати фото десерту.\n\nНатисни кнопку "📸 Згенерувати фото десерту" або надішли фото напряму.', {
+    reply_markup: {
+      keyboard: [
+        [{ text: '📸 Згенерувати фото десерту' }],
+        [{ text: '💡 Стилі / Пресети' }],
+        [{ text: 'ℹ️ Про бота' }, { text: '⚙️ Налаштування' }]
+      ],
+      resize_keyboard: true,
+    },
+  });
+});
+
+// Обробка помилок
+bot.catch((err, ctx) => {
+  console.error('Error in bot:', err);
+  ctx.reply('❌ Виникла несподівана помилка. Спробуй ще раз пізніше.');
+});
+
+// Налаштування меню команд
+const setupCommands = async () => {
+  try {
+    await bot.telegram.setMyCommands([
+      { command: 'start', description: 'Початок роботи з ботом' },
+      { command: 'my_creatives', description: 'Мої креативи' },
+      { command: 'help', description: 'Допомога та інструкції' },
+    ]);
+    console.log('✅ Меню команд налаштовано');
+  } catch (error) {
+    console.error('⚠️ Помилка налаштування команд:', error);
+  }
+};
+
+// Обробка кнопки "📸 Мої креативи"
+bot.hears('📸 Мої креативи', async (ctx) => {
+  try {
+    // Викликаємо команду /my_creatives
+    const creatives = await db.getUserCreatives(ctx.from.id, 5);
+    console.log(`[button] User ${ctx.from.id}, found ${creatives.length} creatives`);
+
+    const menuKeyboard = {
+      keyboard: [
+        [
+          { text: '📸 Мої креативи' },
+          { text: '❓ Допомога' }
+        ]
+      ],
+      resize_keyboard: true,
+    };
+
+    if (creatives.length === 0) {
+      await ctx.reply('📭 У тебе ще немає створених креативів.\n\nНадішли фото або опиши свій виріб, щоб створити перший креатив!', {
+        reply_markup: menuKeyboard,
+      });
+      return;
+    }
+
+    await ctx.reply(`📸 Твої останні креативи (${creatives.length}):`, {
+      reply_markup: menuKeyboard,
+    });
+
+    for (const creative of creatives) {
+      try {
+        console.log(`[button] Processing creative ${creative.id}, URL: ${creative.generated_image_url}`);
+        
+        if (creative.generated_image_url) {
+          const caption = creative.caption 
+            ? `${creative.caption}\n\n📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}`
+            : `📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}`;
+          
+          console.log(`[button] Sending photo with URL: ${creative.generated_image_url}`);
+          await ctx.replyWithPhoto(creative.generated_image_url, {
+            caption: caption.substring(0, 1024),
+          });
+          console.log(`[button] Successfully sent creative ${creative.id}`);
+        } else {
+          console.warn(`[button] Creative ${creative.id} has no image URL`);
+          await ctx.reply(`📄 Креатив #${creative.id}\n${creative.caption || 'Без опису'}\n📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}`);
+        }
+      } catch (error) {
+        console.error(`[button] Error sending creative ${creative.id}:`, error);
+        console.error(`[button] Error details:`, error.message);
+        try {
+          await ctx.reply(`📄 Креатив #${creative.id}\n${creative.caption || 'Без опису'}\n📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}\n\n⚠️ Не вдалося завантажити зображення`);
+        } catch (e) {
+          console.error(`[button] Failed to send fallback message:`, e);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('[button] Error:', error);
+    await ctx.reply('❌ Виникла помилка при завантаженні креативів. Спробуй ще раз пізніше.');
+  }
 });
 
 // Запускаємо webhook сервер
