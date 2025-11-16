@@ -153,6 +153,26 @@ export class Database {
     return data;
   }
 
+  /**
+   * Отримує платіж за payment_id
+   * @param {string} paymentId - Payment ID (orderReference)
+   * @returns {Object|null} Дані про платіж або null
+   */
+  async getPaymentByPaymentId(paymentId) {
+    const { data, error } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('payment_id', paymentId)
+      .maybeSingle();
+    
+    if (error) {
+      console.error('[getPaymentByPaymentId] Error getting payment:', error);
+      return null;
+    }
+    
+    return data;
+  }
+
   async updatePaymentStatus(paymentId, status, userId = null, amount = null, currency = null) {
     // Спочатку перевіряємо, чи існує платіж
     const { data: existingPayment, error: checkError } = await supabase
