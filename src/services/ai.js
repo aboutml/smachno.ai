@@ -7,18 +7,37 @@ const openai = new OpenAI({
 
 export class AIService {
   /**
-   * Генерує зображення на основі промпту
+   * Генерує зображення на основі промпту та стилю
    * @param {string} prompt - Опис зображення
+   * @param {string} style - Стиль генерації (bright, premium, cozy, wedding, custom)
+   * @param {string} customWishes - Додаткові побажання користувача (опціонально)
    * @param {number} n - Кількість варіантів (1-2)
    * @returns {Promise<Array<string>>} Масив URL зображень
    */
-  async generateImage(prompt, n = 2) {
+  async generateImage(prompt, style = null, customWishes = null, n = 2) {
     try {
-      const enhancedPrompt = `Professional Instagram-style food photography: ${prompt}. 
+      // Базовий промпт
+      let enhancedPrompt = `Professional Instagram-style food photography: ${prompt}. 
         High quality, beautiful lighting, appetizing presentation, 
-        modern bakery/cafe aesthetic, clean background, 
-        professional food styling, vibrant colors, 
-        suitable for social media marketing.`;
+        professional food styling, suitable for social media marketing.`;
+
+      // Додаємо стильові характеристики
+      const stylePrompts = {
+        bright: 'Vibrant, juicy colors, fresh and appetizing look, bright natural lighting, colorful background, energetic and lively atmosphere, perfect for showcasing fresh ingredients.',
+        premium: 'Luxury pastry shop aesthetic, elegant presentation, sophisticated styling, premium quality look, refined composition, high-end bakery atmosphere, elegant background, professional patisserie style.',
+        cozy: 'Cozy cafe atmosphere, warm and inviting, soft natural lighting, rustic or vintage style, comfortable and homely feeling, perfect for coffee shop Instagram, warm color palette, intimate setting.',
+        wedding: 'Wedding cake aesthetic, elegant and romantic, soft pastel colors, delicate decorations, sophisticated and refined, perfect for special occasions, elegant composition, celebration style.',
+        custom: ''
+      };
+
+      if (style && stylePrompts[style]) {
+        enhancedPrompt += ' ' + stylePrompts[style];
+      }
+
+      // Додаємо додаткові побажання користувача
+      if (customWishes && customWishes.trim()) {
+        enhancedPrompt += ` Additional requirements: ${customWishes}.`;
+      }
 
       const response = await openai.images.generate({
         model: 'dall-e-3',
@@ -38,9 +57,10 @@ export class AIService {
         // Невелика затримка між запитами
         await new Promise(resolve => setTimeout(resolve, 1000));
         
+        const secondPrompt = enhancedPrompt + ' Different angle, alternative composition, slightly different styling and perspective.';
         const secondResponse = await openai.images.generate({
           model: 'dall-e-3',
-          prompt: enhancedPrompt + ' Different angle, alternative composition, slightly different styling.',
+          prompt: secondPrompt,
           n: 1,
           size: '1024x1024',
           quality: 'standard',

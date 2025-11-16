@@ -6,6 +6,10 @@ import { aiService } from './services/ai.js';
 import { paymentService } from './services/payment.js';
 import { storageService } from './services/storage.js';
 
+// Зберігання стану користувачів (для MVP - в пам'яті)
+// Структура: { telegramId: { photoUrl, style, customWishes, originalPhotoUrl } }
+const userSessions = new Map();
+
 if (!config.telegram.token) {
   console.error('❌ TELEGRAM_BOT_TOKEN is required!');
   process.exit(1);
@@ -33,25 +37,24 @@ bot.command('start', async (ctx) => {
 
   const welcomeMessage = `🍰 Привіт, ${user.first_name || 'користувач'}!
 
-Я **Смачно.AI** — допоможу створити стильні креативи для твоєї пекарні або кав'ярні! 
+Я **Смачно.AI** — допоможу покращити фото твоїх десертів та створити стильні креативи для Instagram! 
 
 📸 **Як це працює:**
-1. Надішли фото свого виробу або опиши його текстом
-2. Я згенерую 1-2 варіанти креативів у стилі Instagram-посту
-3. Отримаєш готовий підпис до посту українською
+1. Надішли фото десерту
+2. Обери стиль для покращення
+3. Отримай 2 варіанти покращеного фото
 
 🎁 **Перші ${config.app.freeGenerations} генерації — безкоштовно!**
 
-Надішли фото або опиши свій виріб, і почнемо! ✨`;
+Обери, що хочеш зробити:`;
 
   await ctx.reply(welcomeMessage, {
     parse_mode: 'Markdown',
     reply_markup: {
       keyboard: [
-        [
-          { text: '📸 Мої креативи' },
-          { text: '❓ Допомога' }
-        ]
+        [{ text: '📸 Згенерувати фото десерту' }],
+        [{ text: '💡 Стилі / Пресети' }],
+        [{ text: 'ℹ️ Про бота' }, { text: '⚙️ Налаштування' }]
       ],
       resize_keyboard: true,
     },
@@ -200,7 +203,379 @@ bot.command('broadcast', async (ctx) => {
 // Обробка фото
 bot.on('photo', async (ctx) => {
   try {
-    // Перевіряємо ліміт ПЕРЕД обробкою фото
+    const photo = ctx.message.photo[ctx.message.photo.length - 1]; // Найбільше фото
+    const file = await ctx.telegram.getFile(photo.file_id);
+    const fileUrl = `https://api.telegram.org/file/bot${config.telegram.token}/${file.file_path}`;
+
+    // Зберігаємо оригінальне фото
+    const originalPhotoUrl = await storageService.uploadFromTelegram(
+      fileUrl,
+      `${ctx.from.id}_${Date.now()}.jpg`
+    );
+
+    // Зберігаємо фото в сесії користувача
+    userSessions.set(ctx.from.id, {
+      originalPhotoUrl,
+      photoUrl: originalPhotoUrl,
+      style: null,
+      customWishes: null,
+    });
+
+    // Показуємо вибір стилю
+    await ctx.reply(
+      'Обери стиль для покращеного фото 👇',
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '🍓 Яскравий та соковитий', callback_data: 'style_bright' }],
+            [{ text: '🧁 Преміум-кондитерська', callback_data: 'style_premium' }],
+            [{ text: '☕ Затишна кав\'ярня', callback_data: 'style_cozy' }],
+            [{ text: '🎂 Весільна естетика', callback_data: 'style_wedding' }],
+            [{ text: '➕ Додати свої побажання', callback_data: 'style_custom' }],
+            [{ text: '🔙 Назад', callback_data: 'back_to_menu' }]
+          ],
+        },
+      }
+    );
+
+  } catch (error) {
+    console.error('Error processing photo:', error);
+    await ctx.reply('❌ Виникла помилка при обробці фото. Спробуй ще раз або звернись до підтримки.');
+  }
+});
+
+// Обробка callback для вибору стилю
+bot.action(/^style_(bright|premium|cozy|wedding|custom)$/, async (ctx) => {
+  try {
+    const style = ctx.match[1];
+    const session = userSessions.get(ctx.from.id);
+    
+    if (!session || !session.originalPhotoUrl) {
+      await ctx.answerCbQuery('Помилка: фото не знайдено. Надішли фото спочатку.');
+      return;
+    }
+
+    // Оновлюємо стиль в сесії
+    session.style = style;
+    userSessions.set(ctx.from.id, session);
+
+    if (style === 'custom') {
+      // Якщо обрано кастомний стиль, просимо побажання
+      await ctx.editMessageText(
+        'Напиши додаткові побажання до стилю — що підкреслити, змінити чи додати.'
+      );
+      await ctx.answerCbQuery();
+    } else {
+      // Якщо обрано готовий стиль, одразу запускаємо генерацію
+      await ctx.editMessageText('Чудово! Починаю генерувати 😋\n\nЦе займе близько 1 хвилини.');
+      await ctx.answerCbQuery();
+      
+      // Запускаємо генерацію
+      await processGeneration(ctx, session);
+    }
+  } catch (error) {
+    console.error('Error handling style selection:', error);
+    await ctx.answerCbQuery('Помилка при обробці. Спробуй ще раз.');
+  }
+});
+
+// Обробка callback для кнопок після генерації
+bot.action('regenerate_same', async (ctx) => {
+  try {
+    const session = userSessions.get(ctx.from.id);
+    if (!session || !session.originalPhotoUrl) {
+      await ctx.answerCbQuery('Помилка: фото не знайдено. Надішли фото спочатку.');
+      return;
+    }
+    
+    // Показуємо вибір стилю знову
+    await ctx.editMessageText('Обери стиль для покращеного фото 👇');
+    await ctx.reply('Обери стиль для покращеного фото 👇', {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '🍓 Яскравий та соковитий', callback_data: 'style_bright' }],
+          [{ text: '🧁 Преміум-кондитерська', callback_data: 'style_premium' }],
+          [{ text: '☕ Затишна кав\'ярня', callback_data: 'style_cozy' }],
+          [{ text: '🎂 Весільна естетика', callback_data: 'style_wedding' }],
+          [{ text: '➕ Додати свої побажання', callback_data: 'style_custom' }],
+          [{ text: '🔙 Назад', callback_data: 'back_to_menu' }]
+        ],
+      },
+    });
+    await ctx.answerCbQuery();
+  } catch (error) {
+    console.error('Error handling regenerate:', error);
+    await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
+  }
+});
+
+bot.action('change_style', async (ctx) => {
+  try {
+    const session = userSessions.get(ctx.from.id);
+    if (!session || !session.originalPhotoUrl) {
+      await ctx.answerCbQuery('Помилка: фото не знайдено. Надішли фото спочатку.');
+      return;
+    }
+    
+    // Скидаємо стиль та показуємо вибір знову
+    session.style = null;
+    session.customWishes = null;
+    userSessions.set(ctx.from.id, session);
+    
+    await ctx.editMessageText('Обери стиль для покращеного фото 👇');
+    await ctx.reply('Обери стиль для покращеного фото 👇', {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '🍓 Яскравий та соковитий', callback_data: 'style_bright' }],
+          [{ text: '🧁 Преміум-кондитерська', callback_data: 'style_premium' }],
+          [{ text: '☕ Затишна кав\'ярня', callback_data: 'style_cozy' }],
+          [{ text: '🎂 Весільна естетика', callback_data: 'style_wedding' }],
+          [{ text: '➕ Додати свої побажання', callback_data: 'style_custom' }],
+          [{ text: '🔙 Назад', callback_data: 'back_to_menu' }]
+        ],
+      },
+    });
+    await ctx.answerCbQuery();
+  } catch (error) {
+    console.error('Error handling change style:', error);
+    await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
+  }
+});
+
+bot.action('new_photo', async (ctx) => {
+  try {
+    // Очищаємо сесію
+    userSessions.delete(ctx.from.id);
+    
+    await ctx.editMessageText('Надішли нове фото десерту, який хочеш покращити 🍰✨');
+    await ctx.answerCbQuery();
+  } catch (error) {
+    console.error('Error handling new photo:', error);
+    await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
+  }
+});
+
+// Обробка callback для стилів/пресетів
+bot.action(/^style_(cakes|cupcakes|donuts|drinks|cookies|desserts)$/, async (ctx) => {
+  try {
+    const category = ctx.match[1];
+    const categoryNames = {
+      cakes: 'Торти',
+      cupcakes: 'Капкейки',
+      donuts: 'Пончики',
+      drinks: 'Напої',
+      cookies: 'Печиво',
+      desserts: 'Десерти'
+    };
+    
+    await ctx.editMessageText(
+      `🍰 Приклади ${categoryNames[category]} для натхнення:\n\n` +
+      `(Тут будуть показані приклади AI-фото)\n\n` +
+      `Це лише для натхнення. Для генерації своїх фото натисни кнопку нижче 👇`,
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '📸 Хочу згенерувати своє фото', callback_data: 'generate_own' }],
+            [{ text: '🔙 Назад', callback_data: 'back_to_menu' }]
+          ],
+        },
+      }
+    );
+    await ctx.answerCbQuery();
+  } catch (error) {
+    console.error('Error handling style category:', error);
+    await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
+  }
+});
+
+bot.action('generate_own', async (ctx) => {
+  try {
+    await ctx.editMessageText('Надішли фото десерту, який хочеш покращити 🍰✨');
+    await ctx.answerCbQuery();
+  } catch (error) {
+    console.error('Error handling generate own:', error);
+    await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
+  }
+});
+
+// Обробка callback для кнопок головного меню
+bot.action('generate_photo', async (ctx) => {
+  try {
+    await ctx.editMessageText('Надішли фото десерту, який хочеш покращити 🍰✨');
+    await ctx.answerCbQuery();
+  } catch (error) {
+    console.error('Error handling generate photo:', error);
+    await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
+  }
+});
+
+bot.action('styles_menu', async (ctx) => {
+  try {
+    const stylesMessage = `Обери категорію для натхнення 👇`;
+    
+    await ctx.editMessageText(stylesMessage, {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '🍰 Торти', callback_data: 'style_cakes' }],
+          [{ text: '🧁 Капкейки', callback_data: 'style_cupcakes' }],
+          [{ text: '🍩 Пончики', callback_data: 'style_donuts' }],
+          [{ text: '☕ Напої', callback_data: 'style_drinks' }],
+          [{ text: '🍪 Печиво', callback_data: 'style_cookies' }],
+          [{ text: '🍮 Десерти', callback_data: 'style_desserts' }],
+          [{ text: '📸 Хочу згенерувати своє фото', callback_data: 'generate_own' }],
+          [{ text: '🔙 Назад', callback_data: 'back_to_menu' }]
+        ],
+      },
+    });
+    await ctx.answerCbQuery();
+  } catch (error) {
+    console.error('Error handling styles menu:', error);
+    await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
+  }
+});
+
+bot.action('about', async (ctx) => {
+  try {
+    const aboutMessage = `🍰 <b>Смачно.AI</b>
+
+Я допоможу покращити фото твоїх десертів та створити стильні креативи для Instagram!
+
+✨ <b>Можливості:</b>
+• Покращення фото десертів
+• 4 готові стилі для обробки
+• Завжди 2 варіанти результатів
+• Генерація підписів до постів
+
+🎁 <b>Безкоштовно:</b>
+Перші ${config.app.freeGenerations} генерації — безкоштовно!
+Після цього: ${config.payment.amount} грн за ${config.app.paidGenerationsPerPayment} генерації`;
+
+    await ctx.editMessageText(aboutMessage, {
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '🏠 Головне меню', callback_data: 'back_to_menu' }]
+        ],
+      },
+    });
+    await ctx.answerCbQuery();
+  } catch (error) {
+    console.error('Error handling about:', error);
+    await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
+  }
+});
+
+bot.action('settings', async (ctx) => {
+  try {
+    const settingsMessage = `⚙️ <b>Налаштування</b>
+
+Обери опцію:`;
+
+    await ctx.editMessageText(settingsMessage, {
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '💾 Історія генерацій', callback_data: 'history' }],
+          [{ text: '🧩 Мова інтерфейсу: Українська', callback_data: 'language' }],
+          [{ text: '🏠 Головне меню', callback_data: 'back_to_menu' }]
+        ],
+      },
+    });
+    await ctx.answerCbQuery();
+  } catch (error) {
+    console.error('Error handling settings:', error);
+    await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
+  }
+});
+
+// Обробка callback для налаштувань
+bot.action('history', async (ctx) => {
+  try {
+    const userData = await db.createOrUpdateUser(ctx.from.id, {
+      username: ctx.from.username,
+      first_name: ctx.from.first_name,
+    });
+    
+    const creatives = await db.getUserCreatives(ctx.from.id, 5);
+    
+    if (!creatives || creatives.length === 0) {
+      await ctx.editMessageText('💾 У тебе поки немає згенерованих креативів.\n\nСтвори свій перший креатив!');
+      await ctx.answerCbQuery();
+      return;
+    }
+    
+    let message = '💾 <b>Історія генерацій:</b>\n\n';
+    for (let i = 0; i < Math.min(creatives.length, 5); i++) {
+      const creative = creatives[i];
+      const date = new Date(creative.created_at).toLocaleDateString('uk-UA');
+      message += `${i + 1}. ${date}\n`;
+      if (creative.caption) {
+        message += `   ${creative.caption.substring(0, 50)}...\n\n`;
+      }
+    }
+    
+    await ctx.editMessageText(message, {
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '🏠 Головне меню', callback_data: 'back_to_menu' }]
+        ],
+      },
+    });
+    await ctx.answerCbQuery();
+  } catch (error) {
+    console.error('Error handling history:', error);
+    await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
+  }
+});
+
+bot.action('language', async (ctx) => {
+  try {
+    await ctx.answerCbQuery('Мова інтерфейсу: Українська (єдина)');
+  } catch (error) {
+    console.error('Error handling language:', error);
+    await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
+  }
+});
+
+// Обробка callback для повернення до меню
+bot.action('back_to_menu', async (ctx) => {
+  try {
+    const user = ctx.from;
+    const welcomeMessage = `🍰 Привіт, ${user.first_name || 'користувач'}!
+
+Я **Смачно.AI** — допоможу покращити фото твоїх десертів та створити стильні креативи для Instagram! 
+
+📸 **Як це працює:**
+1. Надішли фото десерту
+2. Обери стиль для покращення
+3. Отримай 2 варіанти покращеного фото
+
+🎁 **Перші ${config.app.freeGenerations} генерації — безкоштовно!**
+
+Обери, що хочеш зробити:`;
+
+    await ctx.editMessageText(welcomeMessage, {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '📸 Згенерувати фото десерту', callback_data: 'generate_photo' }],
+          [{ text: '💡 Стилі / Пресети', callback_data: 'styles_menu' }],
+          [{ text: 'ℹ️ Про бота', callback_data: 'about' }, { text: '⚙️ Налаштування', callback_data: 'settings' }]
+        ],
+      },
+    });
+    await ctx.answerCbQuery();
+  } catch (error) {
+    console.error('Error handling back to menu:', error);
+    await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
+  }
+});
+
+// Функція для обробки генерації
+async function processGeneration(ctx, session) {
+  try {
+    // Перевіряємо ліміт ПЕРЕД генерацією
     const user = await db.getUserByTelegramId(ctx.from.id);
     const freeGenerationsUsed = user?.free_generations_used || 0;
     const canGenerateFree = freeGenerationsUsed < config.app.freeGenerations;
@@ -208,11 +583,11 @@ bot.on('photo', async (ctx) => {
     // Перевіряємо, скільки оплачених генерацій доступно
     const availablePaidGenerations = await db.getAvailablePaidGenerations(ctx.from.id);
 
-    console.log(`[photo] User ${ctx.from.id}, free generations used: ${freeGenerationsUsed}/${config.app.freeGenerations}, can generate free: ${canGenerateFree}, available paid: ${availablePaidGenerations}`);
+    console.log(`[generation] User ${ctx.from.id}, free generations used: ${freeGenerationsUsed}/${config.app.freeGenerations}, can generate free: ${canGenerateFree}, available paid: ${availablePaidGenerations}`);
 
     // Якщо немає безкоштовних генерацій І немає доступних оплачених - потрібна оплата
     if (!canGenerateFree && availablePaidGenerations === 0) {
-      // Потрібна оплата - показуємо кнопку одразу
+      // Потрібна оплата - показуємо кнопку
       try {
         const payment = await paymentService.createPayment(ctx.from.id);
         
@@ -232,7 +607,7 @@ bot.on('photo', async (ctx) => {
         );
         return;
       } catch (paymentError) {
-        console.error('[photo] Payment creation error:', paymentError);
+        console.error('[generation] Payment creation error:', paymentError);
         await ctx.reply(
           `💰 Для створення креативу потрібна оплата ${config.payment.amount} грн.\n\n` +
           `⚠️ Помилка створення платежу. Спробуй ще раз або звернись до підтримки.`
@@ -241,27 +616,22 @@ bot.on('photo', async (ctx) => {
       }
     }
 
-    await ctx.reply('⏳ Обробляю фото та генерую креатив...');
-
-    const photo = ctx.message.photo[ctx.message.photo.length - 1]; // Найбільше фото
-    const file = await ctx.telegram.getFile(photo.file_id);
-    const fileUrl = `https://api.telegram.org/file/bot${config.telegram.token}/${file.file_path}`;
-
-    // Зберігаємо оригінальне фото
-    const originalPhotoUrl = await storageService.uploadFromTelegram(
-      fileUrl,
-      `${ctx.from.id}_${Date.now()}.jpg`
-    );
+    // Показуємо повідомлення про генерацію
+    await ctx.reply('Працюю над твоїм смачним фото… Це займе до хвилини ⏳');
 
     // Аналізуємо фото
-    const imageDescription = await aiService.analyzeImage(originalPhotoUrl);
+    const imageDescription = await aiService.analyzeImage(session.originalPhotoUrl);
     
-    // Генеруємо зображення
-    const prompt = `Instagram-style food photography: ${imageDescription}`;
-    const generatedImages = await aiService.generateImage(prompt, 2);
+    // Генеруємо зображення з урахуванням стилю
+    const generatedImages = await aiService.generateImage(
+      imageDescription,
+      session.style,
+      session.customWishes,
+      2 // Завжди 2 варіанти
+    );
 
     // Генеруємо підпис
-    const caption = await aiService.generateCaption(imageDescription, prompt);
+    const caption = await aiService.generateCaption(imageDescription, imageDescription);
 
     // Зберігаємо креативи
     const userData = await db.createOrUpdateUser(ctx.from.id, {
@@ -269,14 +639,16 @@ bot.on('photo', async (ctx) => {
       first_name: ctx.from.first_name,
     });
 
+    const savedImageUrls = [];
     for (const imageUrl of generatedImages) {
       const savedImageUrl = await storageService.saveGeneratedImage(
         imageUrl,
         `${ctx.from.id}_${Date.now()}.png`
       );
+      savedImageUrls.push(savedImageUrl);
 
       await db.saveCreative(userData.id, {
-        originalPhotoUrl,
+        originalPhotoUrl: session.originalPhotoUrl,
         prompt: imageDescription,
         generatedImageUrl: savedImageUrl,
         caption,
@@ -284,17 +656,28 @@ bot.on('photo', async (ctx) => {
     }
 
     // Відправляємо результат
-    await ctx.reply('✨ Ось твої креативи:');
+    await ctx.reply('Готово! Ось два варіанти твого оновленого фото 🍰✨');
 
     for (let i = 0; i < generatedImages.length; i++) {
-      const imageCaption = i === 0 
-        ? `${caption}\n\n🎨 Варіант ${i + 1}`
-        : `🎨 Варіант ${i + 1}`;
-
       await ctx.replyWithPhoto(generatedImages[i], {
-        caption: imageCaption.substring(0, 1024),
+        caption: `Варіант ${i + 1}`,
       });
     }
+
+    // Показуємо кнопки дій
+    await ctx.reply(
+      'Що хочеш зробити далі?',
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '🔄 Згенерувати ще раз (те саме фото)', callback_data: 'regenerate_same' }],
+            [{ text: '✨ Змінити стиль', callback_data: 'change_style' }],
+            [{ text: '🖼 Спробувати інше фото', callback_data: 'new_photo' }],
+            [{ text: '🏠 Головне меню', callback_data: 'back_to_menu' }]
+          ],
+        },
+      }
+    );
 
     // Визначаємо, чи це безкоштовна чи оплачена генерація
     const isFreeGeneration = canGenerateFree;
@@ -306,8 +689,7 @@ bot.on('photo', async (ctx) => {
       const remainingFree = config.app.freeGenerations - ((user?.free_generations_used || 0) + 1);
       if (remainingFree > 0) {
         await ctx.reply(
-          `🎁 Залишилось безкоштовних генерацій: ${remainingFree}\n\n` +
-          `Після вичерпання безкоштовних генерацій кожна наступна коштуватиме ${config.payment.amount} грн (${config.app.paidGenerationsPerPayment} генерації).`
+          `🎁 Залишилось безкоштовних генерацій: ${remainingFree}`
         );
       } else {
         await ctx.reply(
@@ -335,16 +717,31 @@ bot.on('photo', async (ctx) => {
       }
     }
 
+    // Очищаємо сесію після успішної генерації
+    userSessions.delete(ctx.from.id);
+
   } catch (error) {
-    console.error('Error processing photo:', error);
-    await ctx.reply('❌ Виникла помилка при обробці фото. Спробуй ще раз або звернись до підтримки.');
+    console.error('Error in processGeneration:', error);
+    await ctx.reply('❌ Виникла помилка при генерації. Спробуй ще раз або звернись до підтримки.');
   }
-});
+}
 
 // Обробка текстового запиту
 bot.on('text', async (ctx) => {
   // Ігноруємо команди
   if (ctx.message.text.startsWith('/')) {
+    return;
+  }
+
+  // Перевіряємо, чи це побажання для кастомного стилю
+  const session = userSessions.get(ctx.from.id);
+  if (session && session.style === 'custom' && !session.customWishes) {
+    // Зберігаємо побажання та запускаємо генерацію
+    session.customWishes = ctx.message.text;
+    userSessions.set(ctx.from.id, session);
+    
+    await ctx.reply('Чудово! Починаю генерувати 😋\n\nЦе займе близько 1 хвилини.');
+    await processGeneration(ctx, session);
     return;
   }
 
@@ -390,86 +787,17 @@ bot.on('text', async (ctx) => {
       }
     }
 
-    await ctx.reply('⏳ Генерую креатив на основі твого опису...');
-
-    const userPrompt = ctx.message.text;
-
-    // Генеруємо зображення
-    const generatedImages = await aiService.generateImage(userPrompt, 2);
-
-    // Генеруємо підпис
-    const caption = await aiService.generateCaption(userPrompt);
-
-    // Зберігаємо креативи
-    const userData = await db.createOrUpdateUser(ctx.from.id, {
-      username: ctx.from.username,
-      first_name: ctx.from.first_name,
+    // Якщо це не побажання для стилю, просимо надіслати фото
+    await ctx.reply('📸 Для генерації потрібно надіслати фото десерту.\n\nНатисни кнопку "📸 Згенерувати фото десерту" або надішли фото напряму.', {
+      reply_markup: {
+        keyboard: [
+          [{ text: '📸 Згенерувати фото десерту' }],
+          [{ text: '💡 Стилі / Пресети' }],
+          [{ text: 'ℹ️ Про бота' }, { text: '⚙️ Налаштування' }]
+        ],
+        resize_keyboard: true,
+      },
     });
-
-    for (const imageUrl of generatedImages) {
-      const savedImageUrl = await storageService.saveGeneratedImage(
-        imageUrl,
-        `${ctx.from.id}_${Date.now()}.png`
-      );
-
-      await db.saveCreative(userData.id, {
-        originalPhotoUrl: null,
-        prompt: userPrompt,
-        generatedImageUrl: savedImageUrl,
-        caption,
-      });
-    }
-
-    // Відправляємо результат
-    await ctx.reply('✨ Ось твої креативи:');
-
-    for (let i = 0; i < generatedImages.length; i++) {
-      const imageCaption = i === 0 
-        ? `${caption}\n\n🎨 Варіант ${i + 1}`
-        : `🎨 Варіант ${i + 1}`;
-
-      await ctx.replyWithPhoto(generatedImages[i], {
-        caption: imageCaption.substring(0, 1024),
-      });
-    }
-
-    // Визначаємо, чи це безкоштовна чи оплачена генерація
-    const isFreeGeneration = canGenerateFree;
-    
-    if (isFreeGeneration) {
-      // Оновлюємо лічильник безкоштовних генерацій
-      await db.incrementFreeGenerations(ctx.from.id);
-      
-      const remainingFree = config.app.freeGenerations - ((user?.free_generations_used || 0) + 1);
-      if (remainingFree > 0) {
-        await ctx.reply(
-          `🎁 Залишилось безкоштовних генерацій: ${remainingFree}`
-        );
-      } else {
-        await ctx.reply(
-          `💳 Безкоштовні генерації вичерпано.\n\n` +
-          `Наступні креативи коштуватимуть ${config.payment.amount} грн (${config.app.paidGenerationsPerPayment} генерації за оплату).`
-        );
-      }
-    } else {
-      // Оновлюємо лічильник оплачених генерацій
-      await db.incrementPaidGenerations(ctx.from.id);
-      
-      // Отримуємо оновлену кількість доступних оплачених генерацій
-      const updatedAvailablePaid = await db.getAvailablePaidGenerations(ctx.from.id);
-      
-      if (updatedAvailablePaid > 0) {
-        await ctx.reply(
-          `💳 Використано 1 оплачену генерацію.\n\n` +
-          `Залишилось оплачених генерацій: ${updatedAvailablePaid}`
-        );
-      } else {
-        await ctx.reply(
-          `💳 Використано останню оплачену генерацію.\n\n` +
-          `Для наступних креативів потрібна оплата ${config.payment.amount} грн (${config.app.paidGenerationsPerPayment} генерації).`
-        );
-      }
-    }
 
   } catch (error) {
     console.error('Error processing text:', error);
@@ -559,35 +887,112 @@ bot.hears('📸 Мої креативи', async (ctx) => {
   }
 });
 
-bot.hears('❓ Допомога', async (ctx) => {
-  // Викликаємо команду /help
-  const helpMessage = `📋 <b>Доступні команди:</b>
+// Обробка кнопки "📸 Згенерувати фото десерту"
+bot.hears('📸 Згенерувати фото десерту', async (ctx) => {
+  await ctx.reply(
+    'Надішли фото десерту, який хочеш покращити 🍰✨',
+    {
+      reply_markup: {
+        keyboard: [
+          [{ text: '🔙 Назад' }]
+        ],
+        resize_keyboard: true,
+      },
+    }
+  );
+});
 
-/start - Початок роботи з ботом
-/my_creatives - Переглянути мої креативи
-/help - Показати це меню допомоги
+// Обробка кнопки "💡 Стилі / Пресети"
+bot.hears('💡 Стилі / Пресети', async (ctx) => {
+  const stylesMessage = `Обери категорію для натхнення 👇`;
+  
+  await ctx.reply(stylesMessage, {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '🍰 Торти', callback_data: 'style_cakes' }],
+        [{ text: '🧁 Капкейки', callback_data: 'style_cupcakes' }],
+        [{ text: '🍩 Пончики', callback_data: 'style_donuts' }],
+        [{ text: '☕ Напої', callback_data: 'style_drinks' }],
+        [{ text: '🍪 Печиво', callback_data: 'style_cookies' }],
+        [{ text: '🍮 Десерти', callback_data: 'style_desserts' }],
+        [{ text: '📸 Хочу згенерувати своє фото', callback_data: 'generate_own' }],
+        [{ text: '🔙 Назад', callback_data: 'back_to_menu' }]
+      ],
+    },
+  });
+});
 
-📸 <b>Як створити креатив:</b>
-• Надішли фото свого виробу
-• Або опиши текстом, що хочеш створити
+// Обробка кнопки "ℹ️ Про бота"
+bot.hears('ℹ️ Про бота', async (ctx) => {
+  const aboutMessage = `🍰 <b>Смачно.AI</b>
 
-🎁 <b>Безкоштовні генерації:</b>
-Перші ${config.app.freeGenerations} креативи — безкоштовно!
-Після цього кожен креатив коштує ${config.payment.amount} грн.
+Я допоможу покращити фото твоїх десертів та створити стильні креативи для Instagram!
 
-💡 <b>Поради:</b>
-• Чим детальніший опис, тим кращий результат
-• Фото має бути якісним та добре освітленим
-• Можна створити кілька варіантів для одного виробу`;
+✨ <b>Можливості:</b>
+• Покращення фото десертів
+• 4 готові стилі для обробки
+• Завжди 2 варіанти результатів
+• Генерація підписів до постів
 
-  await ctx.reply(helpMessage, {
+🎁 <b>Безкоштовно:</b>
+Перші ${config.app.freeGenerations} генерації — безкоштовно!
+Після цього: ${config.payment.amount} грн за ${config.app.paidGenerationsPerPayment} генерації`;
+
+  await ctx.reply(aboutMessage, {
     parse_mode: 'HTML',
     reply_markup: {
       keyboard: [
-        [
-          { text: '📸 Мої креативи' },
-          { text: '❓ Допомога' }
-        ]
+        [{ text: '📸 Згенерувати фото десерту' }],
+        [{ text: '💡 Стилі / Пресети' }],
+        [{ text: 'ℹ️ Про бота' }, { text: '⚙️ Налаштування' }]
+      ],
+      resize_keyboard: true,
+    },
+  });
+});
+
+// Обробка кнопки "⚙️ Налаштування"
+bot.hears('⚙️ Налаштування', async (ctx) => {
+  const settingsMessage = `⚙️ <b>Налаштування</b>
+
+Обери опцію:`;
+
+  await ctx.reply(settingsMessage, {
+    parse_mode: 'HTML',
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '💾 Історія генерацій', callback_data: 'history' }],
+        [{ text: '🧩 Мова інтерфейсу: Українська', callback_data: 'language' }],
+        [{ text: '🏠 Головне меню', callback_data: 'back_to_menu' }]
+      ],
+    },
+  });
+});
+
+// Обробка кнопки "🔙 Назад"
+bot.hears('🔙 Назад', async (ctx) => {
+  // Повертаємо до головного меню
+  const user = ctx.from;
+  const welcomeMessage = `🍰 Привіт, ${user.first_name || 'користувач'}!
+
+Я **Смачно.AI** — допоможу покращити фото твоїх десертів та створити стильні креативи для Instagram! 
+
+📸 **Як це працює:**
+1. Надішли фото десерту
+2. Обери стиль для покращення
+3. Отримай 2 варіанти покращеного фото
+
+🎁 **Перші ${config.app.freeGenerations} генерації — безкоштовно!**
+
+Обери, що хочеш зробити:`;
+
+  await ctx.reply(welcomeMessage, {
+    parse_mode: 'Markdown',
+    reply_markup: {
+      keyboard: [
+        [{ text: '📸 Згенерувати фото десерту' }],
+        [{ text: '💡 Стилі / Пресети' }],
+        [{ text: 'ℹ️ Про бота' }, { text: '⚙️ Налаштування' }]
       ],
       resize_keyboard: true,
     },
