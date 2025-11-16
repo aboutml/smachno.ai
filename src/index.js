@@ -733,6 +733,22 @@ bot.on('text', async (ctx) => {
     return;
   }
 
+  // Ігноруємо кнопки меню - вони обробляються через bot.hears()
+  const menuButtons = [
+    '📸 Згенерувати фото десерту',
+    '💡 Стилі / Пресети',
+    'ℹ️ Про бота',
+    '⚙️ Налаштування',
+    '🔙 Назад',
+    '📸 Мої креативи',
+    '❓ Допомога'
+  ];
+  
+  if (menuButtons.includes(ctx.message.text)) {
+    // Це кнопка меню, не обробляємо тут - обробляється через bot.hears()
+    return;
+  }
+
   // Перевіряємо, чи це побажання для кастомного стилю
   const session = userSessions.get(ctx.from.id);
   if (session && session.style === 'custom' && !session.customWishes) {
@@ -745,64 +761,17 @@ bot.on('text', async (ctx) => {
     return;
   }
 
-  try {
-    // Перевіряємо ліміт ПЕРЕД генерацією
-    const user = await db.getUserByTelegramId(ctx.from.id);
-    const freeGenerationsUsed = user?.free_generations_used || 0;
-    const canGenerateFree = freeGenerationsUsed < config.app.freeGenerations;
-    
-    // Перевіряємо, скільки оплачених генерацій доступно
-    const availablePaidGenerations = await db.getAvailablePaidGenerations(ctx.from.id);
-
-    console.log(`[text] User ${ctx.from.id}, free generations used: ${freeGenerationsUsed}/${config.app.freeGenerations}, can generate free: ${canGenerateFree}, available paid: ${availablePaidGenerations}`);
-
-    // Якщо немає безкоштовних генерацій І немає доступних оплачених - потрібна оплата
-    if (!canGenerateFree && availablePaidGenerations === 0) {
-      // Потрібна оплата - показуємо кнопку одразу
-      try {
-        const payment = await paymentService.createPayment(ctx.from.id);
-        
-        // Зберігаємо інформацію про платіж
-        const userData = await db.createOrUpdateUser(ctx.from.id, {
-          username: ctx.from.username,
-          first_name: ctx.from.first_name,
-        });
-        await db.createPayment(userData.id, payment.amount * 100, config.payment.currency, payment.orderId);
-        
-        await ctx.reply(
-          `💰 Для створення креативу потрібна оплата ${payment.amount} грн.\n\n` +
-          `Натисни кнопку нижче для оплати:`,
-          Markup.inlineKeyboard([
-            Markup.button.url('💳 Оплатити', payment.checkoutUrl),
-          ])
-        );
-        return;
-      } catch (paymentError) {
-        console.error('[text] Payment creation error:', paymentError);
-        await ctx.reply(
-          `💰 Для створення креативу потрібна оплата ${config.payment.amount} грн.\n\n` +
-          `⚠️ Помилка створення платежу. Спробуй ще раз або звернись до підтримки.`
-        );
-        return;
-      }
-    }
-
-    // Якщо це не побажання для стилю, просимо надіслати фото
-    await ctx.reply('📸 Для генерації потрібно надіслати фото десерту.\n\nНатисни кнопку "📸 Згенерувати фото десерту" або надішли фото напряму.', {
-      reply_markup: {
-        keyboard: [
-          [{ text: '📸 Згенерувати фото десерту' }],
-          [{ text: '💡 Стилі / Пресети' }],
-          [{ text: 'ℹ️ Про бота' }, { text: '⚙️ Налаштування' }]
-        ],
-        resize_keyboard: true,
-      },
-    });
-
-  } catch (error) {
-    console.error('Error processing text:', error);
-    await ctx.reply('❌ Виникла помилка при генерації креативу. Спробуй ще раз або звернись до підтримки.');
-  }
+  // Якщо це не побажання для стилю і не кнопка меню, просимо надіслати фото
+  await ctx.reply('📸 Для генерації потрібно надіслати фото десерту.\n\nНатисни кнопку "📸 Згенерувати фото десерту" або надішли фото напряму.', {
+    reply_markup: {
+      keyboard: [
+        [{ text: '📸 Згенерувати фото десерту' }],
+        [{ text: '💡 Стилі / Пресети' }],
+        [{ text: 'ℹ️ Про бота' }, { text: '⚙️ Налаштування' }]
+      ],
+      resize_keyboard: true,
+    },
+  });
 });
 
 // Обробка помилок
