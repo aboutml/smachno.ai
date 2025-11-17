@@ -233,6 +233,7 @@ bot.on('photo', async (ctx) => {
             [{ text: '➕ Додати свої побажання', callback_data: 'style_custom' }],
             [{ text: '🔙 Назад', callback_data: 'back_to_menu' }]
           ],
+          remove_keyboard: true, // Приховуємо persistent keyboard, коли показуємо inline кнопки
         },
       }
     );
@@ -288,8 +289,7 @@ bot.action('regenerate_same', async (ctx) => {
     }
     
     // Показуємо вибір стилю знову
-    await ctx.editMessageText('Обери стиль для покращеного фото 👇');
-    await ctx.reply('Обери стиль для покращеного фото 👇', {
+    await ctx.editMessageText('Обери стиль для покращеного фото 👇', {
       reply_markup: {
         inline_keyboard: [
           [{ text: '🍓 Яскравий та соковитий', callback_data: 'style_bright' }],
@@ -321,8 +321,7 @@ bot.action('change_style', async (ctx) => {
     session.customWishes = null;
     userSessions.set(ctx.from.id, session);
     
-    await ctx.editMessageText('Обери стиль для покращеного фото 👇');
-    await ctx.reply('Обери стиль для покращеного фото 👇', {
+    await ctx.editMessageText('Обери стиль для покращеного фото 👇', {
       reply_markup: {
         inline_keyboard: [
           [{ text: '🍓 Яскравий та соковитий', callback_data: 'style_bright' }],
@@ -674,6 +673,7 @@ async function processGeneration(ctx, session) {
             [{ text: '🖼 Спробувати інше фото', callback_data: 'new_photo' }],
             [{ text: '🏠 Головне меню', callback_data: 'back_to_menu' }]
           ],
+          remove_keyboard: true, // Приховуємо persistent keyboard, коли показуємо inline кнопки
         },
       }
     );
@@ -756,6 +756,7 @@ bot.hears('💡 Стилі / Пресети', async (ctx) => {
         [{ text: '📸 Хочу згенерувати своє фото', callback_data: 'generate_own' }],
         [{ text: '🔙 Назад', callback_data: 'back_to_menu' }]
       ],
+      remove_keyboard: true, // Приховуємо persistent keyboard, коли показуємо inline кнопки
     },
   });
 });
@@ -803,6 +804,7 @@ bot.hears('⚙️ Налаштування', async (ctx) => {
         [{ text: '🧩 Мова інтерфейсу: Українська', callback_data: 'language' }],
         [{ text: '🏠 Головне меню', callback_data: 'back_to_menu' }]
       ],
+      remove_keyboard: true, // Приховуємо persistent keyboard, коли показуємо inline кнопки
     },
   });
 });
