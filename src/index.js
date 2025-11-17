@@ -51,12 +51,11 @@ bot.command('start', async (ctx) => {
   await ctx.reply(welcomeMessage, {
     parse_mode: 'Markdown',
     reply_markup: {
-      keyboard: [
-        [{ text: '📸 Згенерувати фото десерту' }],
-        [{ text: '💡 Стилі / Пресети' }],
-        [{ text: 'ℹ️ Про бота' }, { text: '⚙️ Налаштування' }]
+      inline_keyboard: [
+        [{ text: '📸 Згенерувати фото десерту', callback_data: 'generate_photo' }],
+        [{ text: '💡 Стилі / Пресети', callback_data: 'styles_menu' }],
+        [{ text: 'ℹ️ Про бота', callback_data: 'about' }, { text: '⚙️ Налаштування', callback_data: 'settings' }]
       ],
-      resize_keyboard: true,
     },
   });
 });
@@ -86,12 +85,11 @@ bot.command('help', async (ctx) => {
   await ctx.reply(helpMessage, {
     parse_mode: 'HTML',
     reply_markup: {
-      keyboard: [
-        [{ text: '📸 Згенерувати фото десерту' }],
-        [{ text: '💡 Стилі / Пресети' }],
-        [{ text: 'ℹ️ Про бота' }, { text: '⚙️ Налаштування' }]
+      inline_keyboard: [
+        [{ text: '📸 Згенерувати фото десерту', callback_data: 'generate_photo' }],
+        [{ text: '💡 Стилі / Пресети', callback_data: 'styles_menu' }],
+        [{ text: 'ℹ️ Про бота', callback_data: 'about' }, { text: '⚙️ Налаштування', callback_data: 'settings' }]
       ],
-      resize_keyboard: true,
     },
   });
 });
@@ -103,12 +101,11 @@ bot.command('my_creatives', async (ctx) => {
     console.log(`[my_creatives] User ${ctx.from.id}, found ${creatives.length} creatives`);
 
     const menuKeyboard = {
-      keyboard: [
-        [{ text: '📸 Згенерувати фото десерту' }],
-        [{ text: '💡 Стилі / Пресети' }],
-        [{ text: 'ℹ️ Про бота' }, { text: '⚙️ Налаштування' }]
+      inline_keyboard: [
+        [{ text: '📸 Згенерувати фото десерту', callback_data: 'generate_photo' }],
+        [{ text: '💡 Стилі / Пресети', callback_data: 'styles_menu' }],
+        [{ text: 'ℹ️ Про бота', callback_data: 'about' }, { text: '⚙️ Налаштування', callback_data: 'settings' }]
       ],
-      resize_keyboard: true,
     };
 
     if (creatives.length === 0) {
@@ -220,7 +217,7 @@ bot.on('photo', async (ctx) => {
       customWishes: null,
     });
 
-    // Показуємо вибір стилю
+    // Показуємо вибір стилю з inline кнопками
     await ctx.reply(
       'Обери стиль для покращеного фото 👇',
       {
@@ -233,7 +230,6 @@ bot.on('photo', async (ctx) => {
             [{ text: '➕ Додати свої побажання', callback_data: 'style_custom' }],
             [{ text: '🔙 Назад', callback_data: 'back_to_menu' }]
           ],
-          remove_keyboard: true, // Приховуємо persistent keyboard, коли показуємо inline кнопки
         },
       }
     );
@@ -399,7 +395,13 @@ bot.action('generate_own', async (ctx) => {
 // Обробка callback для кнопок головного меню
 bot.action('generate_photo', async (ctx) => {
   try {
-    await ctx.editMessageText('Надішли фото десерту, який хочеш покращити 🍰✨');
+    await ctx.editMessageText('Надішли фото десерту, який хочеш покращити 🍰✨', {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '🔙 Назад', callback_data: 'back_to_menu' }]
+        ],
+      },
+    });
     await ctx.answerCbQuery();
   } catch (error) {
     console.error('Error handling generate photo:', error);
@@ -673,7 +675,6 @@ async function processGeneration(ctx, session) {
             [{ text: '🖼 Спробувати інше фото', callback_data: 'new_photo' }],
             [{ text: '🏠 Головне меню', callback_data: 'back_to_menu' }]
           ],
-          remove_keyboard: true, // Приховуємо persistent keyboard, коли показуємо inline кнопки
         },
       }
     );
@@ -725,119 +726,20 @@ async function processGeneration(ctx, session) {
   }
 }
 
-// Обробка кнопки "📸 Згенерувати фото десерту"
-bot.hears('📸 Згенерувати фото десерту', async (ctx) => {
-  await ctx.reply(
-    'Надішли фото десерту, який хочеш покращити 🍰✨',
-    {
-      reply_markup: {
-        keyboard: [
-          [{ text: '🔙 Назад' }]
-        ],
-        resize_keyboard: true,
-      },
-    }
-  );
-});
+// Обробка кнопки "📸 Згенерувати фото десерту" (через callback)
+// Обробник bot.hears видалено, тепер використовується тільки callback
 
-// Обробка кнопки "💡 Стилі / Пресети"
-bot.hears('💡 Стилі / Пресети', async (ctx) => {
-  const stylesMessage = `Обери категорію для натхнення 👇`;
-  
-  await ctx.reply(stylesMessage, {
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: '🍰 Торти', callback_data: 'style_cakes' }],
-        [{ text: '🧁 Капкейки', callback_data: 'style_cupcakes' }],
-        [{ text: '🍩 Пончики', callback_data: 'style_donuts' }],
-        [{ text: '☕ Напої', callback_data: 'style_drinks' }],
-        [{ text: '🍪 Печиво', callback_data: 'style_cookies' }],
-        [{ text: '🍮 Десерти', callback_data: 'style_desserts' }],
-        [{ text: '📸 Хочу згенерувати своє фото', callback_data: 'generate_own' }],
-        [{ text: '🔙 Назад', callback_data: 'back_to_menu' }]
-      ],
-      remove_keyboard: true, // Приховуємо persistent keyboard, коли показуємо inline кнопки
-    },
-  });
-});
+// Обробка кнопки "💡 Стилі / Пресети" (через callback)
+// Обробник bot.hears видалено, тепер використовується тільки callback
 
-// Обробка кнопки "ℹ️ Про бота"
-bot.hears('ℹ️ Про бота', async (ctx) => {
-  const aboutMessage = `🍰 <b>Смачно.AI</b>
+// Обробка кнопки "ℹ️ Про бота" (через callback)
+// Обробник bot.hears видалено, тепер використовується тільки callback
 
-Я допоможу покращити фото твоїх десертів та створити стильні креативи для Instagram!
+// Обробка кнопки "⚙️ Налаштування" (через callback)
+// Обробник bot.hears видалено, тепер використовується тільки callback
 
-✨ <b>Можливості:</b>
-• Покращення фото десертів
-• 4 готові стилі для обробки
-• Завжди 2 варіанти результатів
-• Генерація підписів до постів
-
-🎁 <b>Безкоштовно:</b>
-Перші ${config.app.freeGenerations} генерації — безкоштовно!
-Після цього: ${config.payment.amount} грн за ${config.app.paidGenerationsPerPayment} генерації`;
-
-  await ctx.reply(aboutMessage, {
-    parse_mode: 'HTML',
-    reply_markup: {
-      keyboard: [
-        [{ text: '📸 Згенерувати фото десерту' }],
-        [{ text: '💡 Стилі / Пресети' }],
-        [{ text: 'ℹ️ Про бота' }, { text: '⚙️ Налаштування' }]
-      ],
-      resize_keyboard: true,
-    },
-  });
-});
-
-// Обробка кнопки "⚙️ Налаштування"
-bot.hears('⚙️ Налаштування', async (ctx) => {
-  const settingsMessage = `⚙️ <b>Налаштування</b>
-
-Обери опцію:`;
-
-  await ctx.reply(settingsMessage, {
-    parse_mode: 'HTML',
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: '💾 Історія генерацій', callback_data: 'history' }],
-        [{ text: '🧩 Мова інтерфейсу: Українська', callback_data: 'language' }],
-        [{ text: '🏠 Головне меню', callback_data: 'back_to_menu' }]
-      ],
-      remove_keyboard: true, // Приховуємо persistent keyboard, коли показуємо inline кнопки
-    },
-  });
-});
-
-// Обробка кнопки "🔙 Назад"
-bot.hears('🔙 Назад', async (ctx) => {
-  // Повертаємо до головного меню
-  const user = ctx.from;
-  const welcomeMessage = `🍰 Привіт, ${user.first_name || 'користувач'}!
-
-Я **Смачно.AI** — допоможу покращити фото твоїх десертів та створити стильні креативи для Instagram! 
-
-📸 **Як це працює:**
-1. Надішли фото десерту
-2. Обери стиль для покращення
-3. Отримай 2 варіанти покращеного фото
-
-🎁 **Перші ${config.app.freeGenerations} генерації — безкоштовно!**
-
-Обери, що хочеш зробити:`;
-
-  await ctx.reply(welcomeMessage, {
-    parse_mode: 'Markdown',
-    reply_markup: {
-      keyboard: [
-        [{ text: '📸 Згенерувати фото десерту' }],
-        [{ text: '💡 Стилі / Пресети' }],
-        [{ text: 'ℹ️ Про бота' }, { text: '⚙️ Налаштування' }]
-      ],
-      resize_keyboard: true,
-    },
-  });
-});
+// Обробка кнопки "🔙 Назад" (через callback)
+// Обробник bot.hears видалено, тепер використовується тільки callback
 
 // Обробка текстового запиту (має бути після всіх bot.hears())
 bot.on('text', async (ctx) => {
@@ -859,14 +761,13 @@ bot.on('text', async (ctx) => {
   }
 
   // Якщо це не побажання для стилю, просимо надіслати фото
-  await ctx.reply('📸 Для генерації потрібно надіслати фото десерту.\n\nНатисни кнопку "📸 Згенерувати фото десерту" або надішли фото напряму.', {
+  await ctx.reply('📸 Для генерації потрібно надіслати фото десерту.\n\nНатисни кнопку нижче або надішли фото напряму.', {
     reply_markup: {
-      keyboard: [
-        [{ text: '📸 Згенерувати фото десерту' }],
-        [{ text: '💡 Стилі / Пресети' }],
-        [{ text: 'ℹ️ Про бота' }, { text: '⚙️ Налаштування' }]
+      inline_keyboard: [
+        [{ text: '📸 Згенерувати фото десерту', callback_data: 'generate_photo' }],
+        [{ text: '💡 Стилі / Пресети', callback_data: 'styles_menu' }],
+        [{ text: 'ℹ️ Про бота', callback_data: 'about' }, { text: '⚙️ Налаштування', callback_data: 'settings' }]
       ],
-      resize_keyboard: true,
     },
   });
 });
@@ -891,66 +792,8 @@ const setupCommands = async () => {
   }
 };
 
-// Обробка кнопки "📸 Мої креативи"
-bot.hears('📸 Мої креативи', async (ctx) => {
-  try {
-    // Викликаємо команду /my_creatives
-    const creatives = await db.getUserCreatives(ctx.from.id, 5);
-    console.log(`[button] User ${ctx.from.id}, found ${creatives.length} creatives`);
-
-    const menuKeyboard = {
-      keyboard: [
-        [{ text: '📸 Згенерувати фото десерту' }],
-        [{ text: '💡 Стилі / Пресети' }],
-        [{ text: 'ℹ️ Про бота' }, { text: '⚙️ Налаштування' }]
-      ],
-      resize_keyboard: true,
-    };
-
-    if (creatives.length === 0) {
-      await ctx.reply('📭 У тебе ще немає створених креативів.\n\nНадішли фото десерту, щоб створити перший креатив!', {
-        reply_markup: menuKeyboard,
-      });
-      return;
-    }
-
-    await ctx.reply(`📸 Твої останні креативи (${creatives.length}):`, {
-      reply_markup: menuKeyboard,
-    });
-
-    for (const creative of creatives) {
-      try {
-        console.log(`[button] Processing creative ${creative.id}, URL: ${creative.generated_image_url}`);
-        
-        if (creative.generated_image_url) {
-          const caption = creative.caption 
-            ? `${creative.caption}\n\n📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}`
-            : `📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}`;
-          
-          console.log(`[button] Sending photo with URL: ${creative.generated_image_url}`);
-          await ctx.replyWithPhoto(creative.generated_image_url, {
-            caption: caption.substring(0, 1024),
-          });
-          console.log(`[button] Successfully sent creative ${creative.id}`);
-        } else {
-          console.warn(`[button] Creative ${creative.id} has no image URL`);
-          await ctx.reply(`📄 Креатив #${creative.id}\n${creative.caption || 'Без опису'}\n📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}`);
-        }
-      } catch (error) {
-        console.error(`[button] Error sending creative ${creative.id}:`, error);
-        console.error(`[button] Error details:`, error.message);
-        try {
-          await ctx.reply(`📄 Креатив #${creative.id}\n${creative.caption || 'Без опису'}\n📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}\n\n⚠️ Не вдалося завантажити зображення`);
-        } catch (e) {
-          console.error(`[button] Failed to send fallback message:`, e);
-        }
-      }
-    }
-  } catch (error) {
-    console.error('[button] Error:', error);
-    await ctx.reply('❌ Виникла помилка при завантаженні креативів. Спробуй ще раз пізніше.');
-  }
-});
+// Обробка кнопки "📸 Мої креативи" (через callback)
+// Обробник bot.hears видалено, тепер використовується тільки команда /my_creatives
 
 // Запускаємо webhook сервер
 const webhookApp = express();
