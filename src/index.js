@@ -54,19 +54,16 @@ bot.command('start', async (ctx) => {
       inline_keyboard: [
         [{ text: '📸 Згенерувати фото десерту', callback_data: 'generate_photo' }],
         [{ text: '💡 Стилі / Пресети', callback_data: 'styles_menu' }],
-        [{ text: 'ℹ️ Про бота', callback_data: 'about' }, { text: '⚙️ Налаштування', callback_data: 'settings' }]
+        [{ text: 'ℹ️ Про бота', callback_data: 'about' }, { text: '⚙️ Налаштування', callback_data: 'settings' }],
+        [{ text: '❓ Допомога', callback_data: 'help' }]
       ],
     },
   });
 });
 
-// Команда /help - допомога
+// Команда /help - допомога (fallback для тих, хто вводить вручну)
 bot.command('help', async (ctx) => {
-  const helpMessage = `📋 <b>Доступні команди:</b>
-
-/start - Початок роботи з ботом
-/my_creatives - Переглянути мої креативи
-/help - Показати це меню допомоги
+  const helpMessage = `📋 <b>Допомога</b>
 
 📸 <b>Як створити креатив:</b>
 • Надішли фото десерту
@@ -80,7 +77,9 @@ bot.command('help', async (ctx) => {
 💡 <b>Поради:</b>
 • Фото має бути якісним та добре освітленим
 • Можна вибрати один з 4 готових стилів
-• Або додати свої побажання до стилю`;
+• Або додати свої побажання до стилю
+
+Використовуй кнопки нижче для навігації 👇`;
 
   await ctx.reply(helpMessage, {
     parse_mode: 'HTML',
@@ -88,13 +87,15 @@ bot.command('help', async (ctx) => {
       inline_keyboard: [
         [{ text: '📸 Згенерувати фото десерту', callback_data: 'generate_photo' }],
         [{ text: '💡 Стилі / Пресети', callback_data: 'styles_menu' }],
-        [{ text: 'ℹ️ Про бота', callback_data: 'about' }, { text: '⚙️ Налаштування', callback_data: 'settings' }]
+        [{ text: 'ℹ️ Про бота', callback_data: 'about' }, { text: '⚙️ Налаштування', callback_data: 'settings' }],
+        [{ text: '🏠 Головне меню', callback_data: 'back_to_menu' }]
       ],
     },
   });
 });
 
-// Команда /my_creatives - галерея креативів
+// Команда /my_creatives - галерея креативів (fallback для тих, хто вводить вручну)
+// Основна навігація через кнопку "Мої креативи" в налаштуваннях
 bot.command('my_creatives', async (ctx) => {
   try {
     const creatives = await db.getUserCreatives(ctx.from.id, 5);
@@ -104,7 +105,8 @@ bot.command('my_creatives', async (ctx) => {
       inline_keyboard: [
         [{ text: '📸 Згенерувати фото десерту', callback_data: 'generate_photo' }],
         [{ text: '💡 Стилі / Пресети', callback_data: 'styles_menu' }],
-        [{ text: 'ℹ️ Про бота', callback_data: 'about' }, { text: '⚙️ Налаштування', callback_data: 'settings' }]
+        [{ text: 'ℹ️ Про бота', callback_data: 'about' }, { text: '⚙️ Налаштування', callback_data: 'settings' }],
+        [{ text: '🏠 Головне меню', callback_data: 'back_to_menu' }]
       ],
     };
 
@@ -475,7 +477,7 @@ bot.action('settings', async (ctx) => {
       parse_mode: 'HTML',
       reply_markup: {
         inline_keyboard: [
-          [{ text: '💾 Історія генерацій', callback_data: 'history' }],
+          [{ text: '📸 Мої креативи', callback_data: 'my_creatives' }],
           [{ text: '🧩 Мова інтерфейсу: Українська', callback_data: 'language' }],
           [{ text: '🏠 Головне меню', callback_data: 'back_to_menu' }]
         ],
@@ -488,43 +490,63 @@ bot.action('settings', async (ctx) => {
   }
 });
 
-// Обробка callback для налаштувань
-bot.action('history', async (ctx) => {
+// Обробка callback для "Мої креативи" з налаштувань
+bot.action('my_creatives', async (ctx) => {
   try {
-    const userData = await db.createOrUpdateUser(ctx.from.id, {
-      username: ctx.from.username,
-      first_name: ctx.from.first_name,
-    });
-    
     const creatives = await db.getUserCreatives(ctx.from.id, 5);
-    
-    if (!creatives || creatives.length === 0) {
-      await ctx.editMessageText('💾 У тебе поки немає згенерованих креативів.\n\nСтвори свій перший креатив!');
+    console.log(`[my_creatives callback] User ${ctx.from.id}, found ${creatives.length} creatives`);
+
+    const menuKeyboard = {
+      inline_keyboard: [
+        [{ text: '📸 Згенерувати фото десерту', callback_data: 'generate_photo' }],
+        [{ text: '💡 Стилі / Пресети', callback_data: 'styles_menu' }],
+        [{ text: 'ℹ️ Про бота', callback_data: 'about' }, { text: '⚙️ Налаштування', callback_data: 'settings' }]
+      ],
+    };
+
+    if (creatives.length === 0) {
+      await ctx.editMessageText('📭 У тебе ще немає створених креативів.\n\nНадішли фото десерту, щоб створити перший креатив!', {
+        reply_markup: menuKeyboard,
+      });
       await ctx.answerCbQuery();
       return;
     }
-    
-    let message = '💾 <b>Історія генерацій:</b>\n\n';
-    for (let i = 0; i < Math.min(creatives.length, 5); i++) {
-      const creative = creatives[i];
-      const date = new Date(creative.created_at).toLocaleDateString('uk-UA');
-      message += `${i + 1}. ${date}\n`;
-      if (creative.caption) {
-        message += `   ${creative.caption.substring(0, 50)}...\n\n`;
-      }
-    }
-    
-    await ctx.editMessageText(message, {
-      parse_mode: 'HTML',
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: '🏠 Головне меню', callback_data: 'back_to_menu' }]
-        ],
-      },
+
+    await ctx.editMessageText(`📸 Твої останні креативи (${creatives.length}):`, {
+      reply_markup: menuKeyboard,
     });
     await ctx.answerCbQuery();
+
+    // Відправляємо креативи окремими повідомленнями
+    for (const creative of creatives) {
+      try {
+        console.log(`[my_creatives callback] Processing creative ${creative.id}, URL: ${creative.generated_image_url}`);
+        
+        if (creative.generated_image_url) {
+          const caption = creative.caption 
+            ? `${creative.caption}\n\n📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}`
+            : `📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}`;
+          
+          console.log(`[my_creatives callback] Sending photo with URL: ${creative.generated_image_url}`);
+          await ctx.replyWithPhoto(creative.generated_image_url, {
+            caption: caption.substring(0, 1024),
+          });
+          console.log(`[my_creatives callback] Successfully sent creative ${creative.id}`);
+        } else {
+          console.warn(`[my_creatives callback] Creative ${creative.id} has no image URL`);
+          await ctx.reply(`📄 Креатив #${creative.id}\n${creative.caption || 'Без опису'}\n📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}`);
+        }
+      } catch (error) {
+        console.error(`[my_creatives callback] Error sending creative ${creative.id}:`, error);
+        try {
+          await ctx.reply(`📄 Креатив #${creative.id}\n${creative.caption || 'Без опису'}\n📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}\n\n⚠️ Не вдалося завантажити зображення`);
+        } catch (e) {
+          console.error(`[my_creatives callback] Failed to send fallback message:`, e);
+        }
+      }
+    }
   } catch (error) {
-    console.error('Error handling history:', error);
+    console.error('[my_creatives callback] Error:', error);
     await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
   }
 });
@@ -534,6 +556,45 @@ bot.action('language', async (ctx) => {
     await ctx.answerCbQuery('Мова інтерфейсу: Українська (єдина)');
   } catch (error) {
     console.error('Error handling language:', error);
+    await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
+  }
+});
+
+// Обробка callback для кнопки "Допомога"
+bot.action('help', async (ctx) => {
+  try {
+    const helpMessage = `📋 <b>Допомога</b>
+
+📸 <b>Як створити креатив:</b>
+• Надішли фото десерту
+• Обери стиль для покращення
+• Отримай 2 варіанти покращеного фото
+
+🎁 <b>Безкоштовні генерації:</b>
+Перші ${config.app.freeGenerations} генерації — безкоштовно!
+Після цього: ${config.payment.amount} грн за ${config.app.paidGenerationsPerPayment} генерації
+
+💡 <b>Поради:</b>
+• Фото має бути якісним та добре освітленим
+• Можна вибрати один з 4 готових стилів
+• Або додати свої побажання до стилю
+
+Використовуй кнопки нижче для навігації 👇`;
+
+    await ctx.editMessageText(helpMessage, {
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '📸 Згенерувати фото десерту', callback_data: 'generate_photo' }],
+          [{ text: '💡 Стилі / Пресети', callback_data: 'styles_menu' }],
+          [{ text: 'ℹ️ Про бота', callback_data: 'about' }, { text: '⚙️ Налаштування', callback_data: 'settings' }],
+          [{ text: '🏠 Головне меню', callback_data: 'back_to_menu' }]
+        ],
+      },
+    });
+    await ctx.answerCbQuery();
+  } catch (error) {
+    console.error('Error handling help:', error);
     await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
   }
 });
@@ -561,7 +622,8 @@ bot.action('back_to_menu', async (ctx) => {
         inline_keyboard: [
           [{ text: '📸 Згенерувати фото десерту', callback_data: 'generate_photo' }],
           [{ text: '💡 Стилі / Пресети', callback_data: 'styles_menu' }],
-          [{ text: 'ℹ️ Про бота', callback_data: 'about' }, { text: '⚙️ Налаштування', callback_data: 'settings' }]
+          [{ text: 'ℹ️ Про бота', callback_data: 'about' }, { text: '⚙️ Налаштування', callback_data: 'settings' }],
+          [{ text: '❓ Допомога', callback_data: 'help' }]
         ],
       },
     });
