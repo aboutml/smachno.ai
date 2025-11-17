@@ -61,102 +61,6 @@ bot.command('start', async (ctx) => {
   });
 });
 
-// Команда /help - допомога (fallback для тих, хто вводить вручну)
-bot.command('help', async (ctx) => {
-  const helpMessage = `📋 <b>Допомога</b>
-
-📸 <b>Як створити креатив:</b>
-• Надішли фото десерту
-• Обери стиль для покращення
-• Отримай 2 варіанти покращеного фото
-
-🎁 <b>Безкоштовні генерації:</b>
-Перші ${config.app.freeGenerations} генерації — безкоштовно!
-Після цього: ${config.payment.amount} грн за ${config.app.paidGenerationsPerPayment} генерації
-
-💡 <b>Поради:</b>
-• Фото має бути якісним та добре освітленим
-• Можна вибрати один з 4 готових стилів
-• Або додати свої побажання до стилю
-
-Використовуй кнопки нижче для навігації 👇`;
-
-  await ctx.reply(helpMessage, {
-    parse_mode: 'HTML',
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: '📸 Згенерувати фото десерту', callback_data: 'generate_photo' }],
-        [{ text: '💡 Стилі / Пресети', callback_data: 'styles_menu' }],
-        [{ text: 'ℹ️ Про бота', callback_data: 'about' }, { text: '⚙️ Налаштування', callback_data: 'settings' }],
-        [{ text: '🏠 Головне меню', callback_data: 'back_to_menu' }]
-      ],
-    },
-  });
-});
-
-// Команда /my_creatives - галерея креативів (fallback для тих, хто вводить вручну)
-// Основна навігація через кнопку "Мої креативи" в налаштуваннях
-bot.command('my_creatives', async (ctx) => {
-  try {
-    const creatives = await db.getUserCreatives(ctx.from.id, 5);
-    console.log(`[my_creatives] User ${ctx.from.id}, found ${creatives.length} creatives`);
-
-    const menuKeyboard = {
-      inline_keyboard: [
-        [{ text: '📸 Згенерувати фото десерту', callback_data: 'generate_photo' }],
-        [{ text: '💡 Стилі / Пресети', callback_data: 'styles_menu' }],
-        [{ text: 'ℹ️ Про бота', callback_data: 'about' }, { text: '⚙️ Налаштування', callback_data: 'settings' }],
-        [{ text: '🏠 Головне меню', callback_data: 'back_to_menu' }]
-      ],
-    };
-
-    if (creatives.length === 0) {
-      await ctx.reply('📭 У тебе ще немає створених креативів.\n\nНадішли фото десерту, щоб створити перший креатив!', {
-        reply_markup: menuKeyboard,
-      });
-      return;
-    }
-
-    await ctx.reply(`📸 Твої останні креативи (${creatives.length}):`, {
-      reply_markup: menuKeyboard,
-    });
-
-    for (const creative of creatives) {
-      try {
-        console.log(`[my_creatives] Processing creative ${creative.id}, URL: ${creative.generated_image_url}`);
-        
-        if (creative.generated_image_url) {
-          const caption = creative.caption 
-            ? `${creative.caption}\n\n📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}`
-            : `📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}`;
-          
-          console.log(`[my_creatives] Sending photo with URL: ${creative.generated_image_url}`);
-          await ctx.replyWithPhoto(creative.generated_image_url, {
-            caption: caption.substring(0, 1024), // Telegram обмеження
-          });
-          console.log(`[my_creatives] Successfully sent creative ${creative.id}`);
-        } else {
-          console.warn(`[my_creatives] Creative ${creative.id} has no image URL`);
-          // Відправляємо повідомлення навіть без зображення
-          await ctx.reply(`📄 Креатив #${creative.id}\n${creative.caption || 'Без опису'}\n📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}`);
-        }
-      } catch (error) {
-        console.error(`[my_creatives] Error sending creative ${creative.id}:`, error);
-        console.error(`[my_creatives] Error details:`, error.message);
-        // Спробуємо відправити як повідомлення, якщо фото не вдалося
-        try {
-          await ctx.reply(`📄 Креатив #${creative.id}\n${creative.caption || 'Без опису'}\n📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}\n\n⚠️ Не вдалося завантажити зображення`);
-        } catch (e) {
-          console.error(`[my_creatives] Failed to send fallback message:`, e);
-        }
-      }
-    }
-  } catch (error) {
-    console.error('[my_creatives] Error:', error);
-    await ctx.reply('❌ Виникла помилка при завантаженні креативів. Спробуй ще раз пізніше.');
-  }
-});
-
 // Команда /stats - статистика (тільки для адмінів)
 bot.command('stats', async (ctx) => {
   if (!config.admin.userIds.includes(ctx.from.id)) {
@@ -500,7 +404,14 @@ bot.action('my_creatives', async (ctx) => {
       inline_keyboard: [
         [{ text: '📸 Згенерувати фото десерту', callback_data: 'generate_photo' }],
         [{ text: '💡 Стилі / Пресети', callback_data: 'styles_menu' }],
-        [{ text: 'ℹ️ Про бота', callback_data: 'about' }, { text: '⚙️ Налаштування', callback_data: 'settings' }]
+        [{ text: 'ℹ️ Про бота', callback_data: 'about' }, { text: '⚙️ Налаштування', callback_data: 'settings' }],
+        [{ text: '🏠 Головне меню', callback_data: 'back_to_menu' }]
+      ],
+    };
+
+    const creativeKeyboard = {
+      inline_keyboard: [
+        [{ text: '🏠 Головне меню', callback_data: 'back_to_menu' }]
       ],
     };
 
@@ -518,7 +429,10 @@ bot.action('my_creatives', async (ctx) => {
     await ctx.answerCbQuery();
 
     // Відправляємо креативи окремими повідомленнями
-    for (const creative of creatives) {
+    for (let i = 0; i < creatives.length; i++) {
+      const creative = creatives[i];
+      const isLast = i === creatives.length - 1;
+      
       try {
         console.log(`[my_creatives callback] Processing creative ${creative.id}, URL: ${creative.generated_image_url}`);
         
@@ -530,16 +444,21 @@ bot.action('my_creatives', async (ctx) => {
           console.log(`[my_creatives callback] Sending photo with URL: ${creative.generated_image_url}`);
           await ctx.replyWithPhoto(creative.generated_image_url, {
             caption: caption.substring(0, 1024),
+            reply_markup: isLast ? creativeKeyboard : undefined,
           });
           console.log(`[my_creatives callback] Successfully sent creative ${creative.id}`);
         } else {
           console.warn(`[my_creatives callback] Creative ${creative.id} has no image URL`);
-          await ctx.reply(`📄 Креатив #${creative.id}\n${creative.caption || 'Без опису'}\n📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}`);
+          await ctx.reply(`📄 Креатив #${creative.id}\n${creative.caption || 'Без опису'}\n📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}`, {
+            reply_markup: isLast ? creativeKeyboard : undefined,
+          });
         }
       } catch (error) {
         console.error(`[my_creatives callback] Error sending creative ${creative.id}:`, error);
         try {
-          await ctx.reply(`📄 Креатив #${creative.id}\n${creative.caption || 'Без опису'}\n📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}\n\n⚠️ Не вдалося завантажити зображення`);
+          await ctx.reply(`📄 Креатив #${creative.id}\n${creative.caption || 'Без опису'}\n📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}\n\n⚠️ Не вдалося завантажити зображення`, {
+            reply_markup: isLast ? creativeKeyboard : undefined,
+          });
         } catch (e) {
           console.error(`[my_creatives callback] Failed to send fallback message:`, e);
         }
@@ -843,11 +762,9 @@ bot.catch((err, ctx) => {
 // Налаштування меню команд
 const setupCommands = async () => {
   try {
-    await bot.telegram.setMyCommands([
-      { command: 'start', description: 'Початок роботи з ботом' },
-      { command: 'my_creatives', description: 'Мої креативи' },
-      { command: 'help', description: 'Допомога та інструкції' },
-    ]);
+    // Меню команд видалено - вся навігація через inline кнопки
+    // /start залишається як обробник для автоматичного привітання, але не показується в меню
+    await bot.telegram.setMyCommands([]);
     console.log('✅ Меню команд налаштовано');
   } catch (error) {
     console.error('⚠️ Помилка налаштування команд:', error);
