@@ -600,8 +600,16 @@ async function processGeneration(ctx, session) {
     console.log(`[generation] User ${ctx.from.id}, free generations used: ${freeGenerationsUsed}/${config.app.freeGenerations}, can generate free: ${canGenerateFree}, available paid: ${availablePaidGenerations}`);
 
     // Якщо немає безкоштовних генерацій І немає доступних оплачених - потрібна оплата
+    // Перевіряємо ще раз, чи не з'явилися нові оплачені генерації (на випадок, якщо платіж щойно завершився)
     if (!canGenerateFree && availablePaidGenerations === 0) {
-      // Потрібна оплата - показуємо кнопку
+      // Додаткова перевірка - можливо, платіж щойно завершився і ще не оновився
+      const doubleCheckPaid = await db.getAvailablePaidGenerations(ctx.from.id);
+      if (doubleCheckPaid > 0) {
+        console.log(`[generation] Found ${doubleCheckPaid} available paid generations on second check, proceeding with generation`);
+        // Продовжуємо генерацію з оплаченими генераціями - оновлюємо змінну
+        // availablePaidGenerations вже перевірена, тому просто продовжуємо
+      } else {
+        // Потрібна оплата - показуємо кнопку
       try {
         const payment = await paymentService.createPayment(ctx.from.id);
         
@@ -627,6 +635,7 @@ async function processGeneration(ctx, session) {
           `⚠️ Помилка створення платежу. Спробуй ще раз або звернись до підтримки.`
         );
         return;
+      }
       }
     }
 
@@ -1043,7 +1052,14 @@ webhookApp.post('/payment/webhook', async (req, res) => {
       }
       
       // Оновлюємо статус
-      await db.updatePaymentStatus(paymentId, status, userId, amountInKopecks, currency);
+      const updatedPayment = await db.updatePaymentStatus(paymentId, status, userId, amountInKopecks, currency);
+      
+      // Логуємо результат оновлення
+      if (updatedPayment) {
+        console.log(`[payment/webhook] Payment ${paymentId} updated successfully. Status: ${status}, User ID: ${updatedPayment.user_id}`);
+      } else {
+        console.error(`[payment/webhook] Failed to update payment ${paymentId}`);
+      }
     }
 
     // Якщо платіж успішний І це перший раз (не був вже completed) І це не старий платіж, повідомляємо користувача
@@ -1052,10 +1068,16 @@ webhookApp.post('/payment/webhook', async (req, res) => {
       if (match) {
         const telegramId = parseInt(match[1]);
         try {
+          // Перевіряємо доступні оплачені генерації після успішного платежу
+          const availablePaid = await db.getAvailablePaidGenerations(telegramId);
+          console.log(`[payment/webhook] Payment ${orderReference} completed. User ${telegramId} now has ${availablePaid} available paid generations`);
+          
           console.log(`[payment/webhook] Sending success message to user ${telegramId} for payment ${orderReference}`);
           await bot.telegram.sendMessage(
             telegramId,
-            '✅ Оплата успішна! Тепер ти можеш створити новий креатив. Надішли фото десерту.'
+            `✅ Оплата успішна! Тепер ти можеш створити новий креатив.\n\n` +
+            `Доступно оплачених генерацій: ${availablePaid}\n\n` +
+            `Надішли фото десерту.`
           );
         } catch (error) {
           console.error('Error sending message to user:', error);
@@ -1064,6 +1086,13 @@ webhookApp.post('/payment/webhook', async (req, res) => {
     } else if (transactionStatus === 'Approved') {
       if (wasAlreadyCompleted) {
         console.log(`[payment/webhook] Payment ${orderReference} was already completed, skipping notification`);
+        // Навіть якщо платіж вже був completed, перевіримо доступні генерації
+        const match = orderReference.match(/creative_(\d+)_/);
+        if (match) {
+          const telegramId = parseInt(match[1]);
+          const availablePaid = await db.getAvailablePaidGenerations(telegramId);
+          console.log(`[payment/webhook] User ${telegramId} has ${availablePaid} available paid generations (payment was already completed)`);
+        }
       } else if (isOldPayment) {
         console.log(`[payment/webhook] Payment ${orderReference} is old, skipping notification`);
       }

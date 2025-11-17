@@ -460,6 +460,7 @@ export class Database {
       const availablePaidGenerations = Math.max(0, totalPaidGenerationsAvailable - paidGenerationsUsed);
       
       console.log(`[getAvailablePaidGenerations] User ${telegramId}: completed payments: ${completedPaymentsCount}, used: ${paidGenerationsUsed}, available: ${availablePaidGenerations}`);
+      console.log(`[getAvailablePaidGenerations] Calculation: ${completedPaymentsCount} payments × ${paidGenerationsPerPayment} per payment = ${totalPaidGenerationsAvailable} total, minus ${paidGenerationsUsed} used = ${availablePaidGenerations} available`);
       
       return availablePaidGenerations;
     } catch (error) {
