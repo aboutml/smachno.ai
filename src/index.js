@@ -1154,6 +1154,7 @@ webhookApp.post('/payment/webhook', async (req, res) => {
     
     // Оновлюємо статус платежу та отримуємо інформацію про старий статус
     let wasAlreadyCompleted = false;
+    let isOldPayment = false;
     if (paymentId) {
       // amount приходить в гривнях від WayForPay, конвертуємо в копійки для БД
       const amountInKopecks = Math.round((amount || 0) * 100);
@@ -1162,12 +1163,24 @@ webhookApp.post('/payment/webhook', async (req, res) => {
       const existingPayment = await db.getPaymentByPaymentId(paymentId);
       wasAlreadyCompleted = existingPayment?.status === 'completed';
       
+      // Перевіряємо, чи це старий платіж (створений більше ніж 10 хвилин тому)
+      // Це допомагає уникнути відправки повідомлень для старих платежів, які WayForPay може надсилати повторно
+      if (existingPayment?.created_at) {
+        const paymentAge = Date.now() - new Date(existingPayment.created_at).getTime();
+        const tenMinutes = 10 * 60 * 1000; // 10 хвилин в мілісекундах
+        isOldPayment = paymentAge > tenMinutes;
+        
+        if (isOldPayment) {
+          console.log(`[payment/webhook] Payment ${paymentId} is old (${Math.round(paymentAge / 1000 / 60)} minutes), skipping notification`);
+        }
+      }
+      
       // Оновлюємо статус
       await db.updatePaymentStatus(paymentId, status, userId, amountInKopecks, currency);
     }
 
-    // Якщо платіж успішний І це перший раз (не був вже completed), повідомляємо користувача
-    if (transactionStatus === 'Approved' && !wasAlreadyCompleted) {
+    // Якщо платіж успішний І це перший раз (не був вже completed) І це не старий платіж, повідомляємо користувача
+    if (transactionStatus === 'Approved' && !wasAlreadyCompleted && !isOldPayment) {
       const match = orderReference.match(/creative_(\d+)_/);
       if (match) {
         const telegramId = parseInt(match[1]);
@@ -1175,14 +1188,18 @@ webhookApp.post('/payment/webhook', async (req, res) => {
           console.log(`[payment/webhook] Sending success message to user ${telegramId} for payment ${orderReference}`);
           await bot.telegram.sendMessage(
             telegramId,
-            '✅ Оплата успішна! Тепер ти можеш створити новий креатив. Надішли фото або опиши свій виріб.'
+            '✅ Оплата успішна! Тепер ти можеш створити новий креатив. Надішли фото десерту.'
           );
         } catch (error) {
           console.error('Error sending message to user:', error);
         }
       }
-    } else if (transactionStatus === 'Approved' && wasAlreadyCompleted) {
-      console.log(`[payment/webhook] Payment ${orderReference} was already completed, skipping notification`);
+    } else if (transactionStatus === 'Approved') {
+      if (wasAlreadyCompleted) {
+        console.log(`[payment/webhook] Payment ${orderReference} was already completed, skipping notification`);
+      } else if (isOldPayment) {
+        console.log(`[payment/webhook] Payment ${orderReference} is old, skipping notification`);
+      }
     }
 
     // WayForPay очікує відповідь у форматі: { "orderReference": "...", "status": "accept" }
