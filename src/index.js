@@ -48,6 +48,16 @@ bot.command('start', async (ctx) => {
 
 Обери, що хочеш зробити:`;
 
+  // Спочатку приховуємо будь-який persistent keyboard
+  try {
+    const removeMsg = await ctx.telegram.sendMessage(ctx.chat.id, '', {
+      reply_markup: { remove_keyboard: true },
+    }).catch(() => null);
+    if (removeMsg) {
+      await ctx.telegram.deleteMessage(ctx.chat.id, removeMsg.message_id).catch(() => {});
+    }
+  } catch (e) {}
+
   await ctx.reply(welcomeMessage, {
     parse_mode: 'Markdown',
     reply_markup: {
@@ -122,6 +132,16 @@ bot.on('photo', async (ctx) => {
       style: null,
       customWishes: null,
     });
+
+    // Спочатку приховуємо будь-який persistent keyboard
+    try {
+      const removeMsg = await ctx.telegram.sendMessage(ctx.chat.id, '', {
+        reply_markup: { remove_keyboard: true },
+      }).catch(() => null);
+      if (removeMsg) {
+        await ctx.telegram.deleteMessage(ctx.chat.id, removeMsg.message_id).catch(() => {});
+      }
+    } catch (e) {}
 
     // Показуємо вибір стилю з inline кнопками
     await ctx.reply(
@@ -740,6 +760,16 @@ bot.on('text', async (ctx) => {
     await processGeneration(ctx, session);
     return;
   }
+
+  // Спочатку приховуємо будь-який persistent keyboard
+  try {
+    const removeMsg = await ctx.telegram.sendMessage(ctx.chat.id, '', {
+      reply_markup: { remove_keyboard: true },
+    }).catch(() => null);
+    if (removeMsg) {
+      await ctx.telegram.deleteMessage(ctx.chat.id, removeMsg.message_id).catch(() => {});
+    }
+  } catch (e) {}
 
   // Якщо це не побажання для стилю, просимо надіслати фото
   await ctx.reply('📸 Для генерації потрібно надіслати фото десерту.\n\nНатисни кнопку нижче або надішли фото напряму.', {
