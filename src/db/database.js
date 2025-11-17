@@ -457,10 +457,19 @@ export class Database {
       const paidGenerationsPerPayment = config.app.paidGenerationsPerPayment || 2;
       
       const totalPaidGenerationsAvailable = completedPaymentsCount * paidGenerationsPerPayment;
-      const availablePaidGenerations = Math.max(0, totalPaidGenerationsAvailable - paidGenerationsUsed);
       
-      console.log(`[getAvailablePaidGenerations] User ${telegramId}: completed payments: ${completedPaymentsCount}, used: ${paidGenerationsUsed}, available: ${availablePaidGenerations}`);
-      console.log(`[getAvailablePaidGenerations] Calculation: ${completedPaymentsCount} payments × ${paidGenerationsPerPayment} per payment = ${totalPaidGenerationsAvailable} total, minus ${paidGenerationsUsed} used = ${availablePaidGenerations} available`);
+      // Якщо використано більше, ніж доступно (можливо через помилку в минулому),
+      // обмежуємо використані до доступних, щоб не показувати від'ємне значення
+      const correctedPaidGenerationsUsed = Math.min(paidGenerationsUsed, totalPaidGenerationsAvailable);
+      const availablePaidGenerations = Math.max(0, totalPaidGenerationsAvailable - correctedPaidGenerationsUsed);
+      
+      // Якщо була корекція, логуємо це
+      if (paidGenerationsUsed > totalPaidGenerationsAvailable) {
+        console.warn(`[getAvailablePaidGenerations] User ${telegramId}: Data inconsistency detected! Used ${paidGenerationsUsed} but only ${totalPaidGenerationsAvailable} available. Correcting to ${correctedPaidGenerationsUsed}.`);
+      }
+      
+      console.log(`[getAvailablePaidGenerations] User ${telegramId}: completed payments: ${completedPaymentsCount}, used: ${paidGenerationsUsed} (corrected: ${correctedPaidGenerationsUsed}), available: ${availablePaidGenerations}`);
+      console.log(`[getAvailablePaidGenerations] Calculation: ${completedPaymentsCount} payments × ${paidGenerationsPerPayment} per payment = ${totalPaidGenerationsAvailable} total, minus ${correctedPaidGenerationsUsed} used = ${availablePaidGenerations} available`);
       
       return availablePaidGenerations;
     } catch (error) {

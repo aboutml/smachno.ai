@@ -624,7 +624,8 @@ async function processGeneration(ctx, session) {
           `💰 Для створення креативу потрібна оплата ${payment.amount} грн.\n\n` +
           `Натисни кнопку нижче для оплати:`,
           Markup.inlineKeyboard([
-            Markup.button.url('💳 Оплатити', payment.checkoutUrl),
+            [Markup.button.url('💳 Оплатити', payment.checkoutUrl)],
+            [Markup.button.callback('🏠 Головне меню', 'back_to_menu')]
           ])
         );
         return;
@@ -721,6 +722,17 @@ async function processGeneration(ctx, session) {
         );
       }
     } else {
+      // Перевіряємо, чи є доступні оплачені генерації перед використанням
+      const availableBefore = await db.getAvailablePaidGenerations(ctx.from.id);
+      if (availableBefore <= 0) {
+        console.error(`[generation] User ${ctx.from.id} attempted to use paid generation but has ${availableBefore} available. This should not happen!`);
+        await ctx.reply(
+          `❌ Помилка: немає доступних оплачених генерацій.\n\n` +
+          `Будь ласка, спробуй ще раз або звернись до підтримки.`
+        );
+        return;
+      }
+      
       // Оновлюємо лічильник оплачених генерацій
       await db.incrementPaidGenerations(ctx.from.id);
       
