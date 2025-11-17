@@ -555,17 +555,30 @@ bot.action('back_to_menu', async (ctx) => {
 
 Обери, що хочеш зробити:`;
 
-    await ctx.editMessageText(welcomeMessage, {
-      parse_mode: 'Markdown',
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: '📸 Згенерувати фото десерту', callback_data: 'generate_photo' }],
-          [{ text: '💡 Стилі / Пресети', callback_data: 'styles_menu' }],
-          [{ text: 'ℹ️ Про бота', callback_data: 'about' }, { text: '⚙️ Налаштування', callback_data: 'settings' }],
-          [{ text: '❓ Допомога', callback_data: 'help' }]
-        ],
-      },
-    });
+    const menuKeyboard = {
+      inline_keyboard: [
+        [{ text: '📸 Згенерувати фото десерту', callback_data: 'generate_photo' }],
+        [{ text: '💡 Стилі / Пресети', callback_data: 'styles_menu' }],
+        [{ text: 'ℹ️ Про бота', callback_data: 'about' }, { text: '⚙️ Налаштування', callback_data: 'settings' }],
+        [{ text: '❓ Допомога', callback_data: 'help' }]
+      ],
+    };
+
+    // Спробуємо відредагувати повідомлення, якщо це можливо
+    try {
+      await ctx.editMessageText(welcomeMessage, {
+        parse_mode: 'Markdown',
+        reply_markup: menuKeyboard,
+      });
+    } catch (editError) {
+      // Якщо не вдалося відредагувати (наприклад, це фото або інший тип повідомлення),
+      // відправляємо нове повідомлення
+      await ctx.reply(welcomeMessage, {
+        parse_mode: 'Markdown',
+        reply_markup: menuKeyboard,
+      });
+    }
+    
     await ctx.answerCbQuery();
   } catch (error) {
     console.error('Error handling back to menu:', error);
