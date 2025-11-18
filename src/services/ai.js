@@ -138,10 +138,12 @@ export class AIService {
             contents = enhancedPrompt;
           }
 
+          // Вказуємо, що ми хочемо отримати зображення
           const response = await geminiClient.models.generateContent({
             model: 'gemini-2.5-flash-image',
             contents: contents,
             config: {
+              responseModalities: ['IMAGE'], // Явно вказуємо, що хочемо зображення
               imageConfig: {
                 aspectRatio: '1:1', // Instagram квадрат
               },
@@ -176,13 +178,23 @@ export class AIService {
           }
 
           for (const part of parts) {
-            if (part.inlineData) {
-              // Конвертуємо base64 в data URL
+            if (part.inlineData && part.inlineData.data) {
+              // Конвертуємо base64 в data URL для збереження в storage
               const dataUrl = `data:image/png;base64,${part.inlineData.data}`;
               imageUrls.push(dataUrl);
+              console.log('[Gemini] Successfully received image data');
             } else if (part.text) {
               console.log('[Gemini] Received text instead of image:', part.text);
+              // Якщо отримали текст, це означає, що Gemini не згенерував зображення
+              // Можливо, потрібно використати інший підхід або fallback
+            } else {
+              console.log('[Gemini] Unexpected part structure:', Object.keys(part || {}));
             }
+          }
+          
+          // Якщо не отримали зображення в цій ітерації, логуємо це
+          if (imageUrls.length === i) {
+            console.warn(`[Gemini] No image generated in iteration ${i + 1}`);
           }
 
           // Затримка між запитами

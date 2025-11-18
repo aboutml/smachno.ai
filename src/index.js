@@ -684,8 +684,9 @@ async function processGeneration(ctx, session) {
     // Відправляємо результат
     await ctx.reply('Готово! Ось два варіанти твого оновленого фото 🍰✨');
 
-    for (let i = 0; i < generatedImages.length; i++) {
-      await ctx.replyWithPhoto(generatedImages[i], {
+    // Використовуємо збережені URL з Supabase Storage замість оригінальних URL/data URLs
+    for (let i = 0; i < savedImageUrls.length; i++) {
+      await ctx.replyWithPhoto(savedImageUrls[i], {
         caption: `Варіант ${i + 1}`,
       });
     }
