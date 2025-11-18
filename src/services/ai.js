@@ -16,17 +16,19 @@ export class AIService {
    */
   async generateImage(prompt, style = null, customWishes = null, n = 2) {
     try {
-      // Базовий промпт
-      let enhancedPrompt = `Professional Instagram-style food photography: ${prompt}. 
-        High quality, beautiful lighting, appetizing presentation, 
-        professional food styling, suitable for social media marketing.`;
+      // Базовий промпт з акцентом на реалістичність
+      let enhancedPrompt = `Professional realistic food photography: ${prompt}. 
+        Photorealistic, high resolution, natural lighting, real food texture, 
+        authentic appearance, professional food styling, natural shadows and highlights, 
+        realistic depth of field, natural colors, no artificial or cartoon-like appearance, 
+        suitable for professional Instagram food photography.`;
 
-      // Додаємо стильові характеристики
+      // Додаємо стильові характеристики з акцентом на реалістичність
       const stylePrompts = {
-        bright: 'Vibrant, juicy colors, fresh and appetizing look, bright natural lighting, colorful background, energetic and lively atmosphere, perfect for showcasing fresh ingredients.',
-        premium: 'Luxury pastry shop aesthetic, elegant presentation, sophisticated styling, premium quality look, refined composition, high-end bakery atmosphere, elegant background, professional patisserie style.',
-        cozy: 'Cozy cafe atmosphere, warm and inviting, soft natural lighting, rustic or vintage style, comfortable and homely feeling, perfect for coffee shop Instagram, warm color palette, intimate setting.',
-        wedding: 'Wedding cake aesthetic, elegant and romantic, soft pastel colors, delicate decorations, sophisticated and refined, perfect for special occasions, elegant composition, celebration style.',
+        bright: 'Vibrant natural colors, fresh and appetizing realistic look, bright natural daylight, colorful realistic background, energetic and lively atmosphere, photorealistic food photography, natural textures, real ingredients.',
+        premium: 'Luxury realistic pastry shop aesthetic, elegant photorealistic presentation, sophisticated natural styling, premium quality realistic look, refined natural composition, high-end bakery atmosphere, elegant realistic background, professional patisserie photography style, natural lighting.',
+        cozy: 'Cozy realistic cafe atmosphere, warm and inviting natural lighting, rustic or vintage realistic style, comfortable and homely feeling, perfect for coffee shop Instagram, warm natural color palette, intimate realistic setting, natural textures.',
+        wedding: 'Wedding cake realistic aesthetic, elegant and romantic photorealistic style, soft natural pastel colors, delicate realistic decorations, sophisticated and refined natural appearance, perfect for special occasions, elegant realistic composition, celebration photography style.',
         custom: ''
       };
 
@@ -38,13 +40,16 @@ export class AIService {
       if (customWishes && customWishes.trim()) {
         enhancedPrompt += ` Additional requirements: ${customWishes}.`;
       }
+      
+      // Додаємо фінальне нагадування про реалістичність
+      enhancedPrompt += ' Photorealistic, no illustration style, no cartoon, no digital art, real photography.';
 
       const response = await openai.images.generate({
         model: 'dall-e-3',
         prompt: enhancedPrompt,
         n: Math.min(n, 1), // DALL-E 3 підтримує тільки 1 зображення за раз
         size: '1024x1024',
-        quality: 'standard',
+        quality: 'hd', // HD якість для більшої реалістичності
       });
 
       const imageUrls = [];
@@ -63,7 +68,7 @@ export class AIService {
           prompt: secondPrompt,
           n: 1,
           size: '1024x1024',
-          quality: 'standard',
+          quality: 'hd', // HD якість для більшої реалістичності
         });
         if (secondResponse.data && secondResponse.data[0]) {
           imageUrls.push(secondResponse.data[0].url);
