@@ -745,10 +745,37 @@ async function processGeneration(ctx, session) {
           `Залишилось оплачених генерацій: ${updatedAvailablePaid}`
         );
       } else {
-        await ctx.reply(
-          `💳 Використано останню оплачену генерацію.\n\n` +
-          `Для наступних креативів потрібна оплата ${config.payment.amount} грн (${config.app.paidGenerationsPerPayment} генерації).`
-        );
+        // Показуємо кнопку оплати, оскільки оплачені генерації закінчились
+        try {
+          const payment = await paymentService.createPayment(ctx.from.id);
+          
+          // Зберігаємо інформацію про платіж
+          const userData = await db.createOrUpdateUser(ctx.from.id, {
+            username: ctx.from.username,
+            first_name: ctx.from.first_name,
+          });
+          await db.createPayment(userData.id, payment.amount * 100, config.payment.currency, payment.orderId);
+          
+          await ctx.reply(
+            `💳 Використано останню оплачену генерацію.\n\n` +
+            `Для наступних креативів потрібна оплата ${payment.amount} грн (${config.app.paidGenerationsPerPayment} генерації).\n\n` +
+            `Натисни кнопку нижче для оплати:`,
+            Markup.inlineKeyboard([
+              [Markup.button.url('💳 Оплатити', payment.checkoutUrl)],
+              [Markup.button.callback('🏠 Головне меню', 'back_to_menu')]
+            ])
+          );
+        } catch (paymentError) {
+          console.error('[generation] Payment creation error:', paymentError);
+          await ctx.reply(
+            `💳 Використано останню оплачену генерацію.\n\n` +
+            `Для наступних креативів потрібна оплата ${config.payment.amount} грн (${config.app.paidGenerationsPerPayment} генерації).\n\n` +
+            `⚠️ Помилка створення платежу. Спробуй ще раз або звернись до підтримки.`,
+            Markup.inlineKeyboard([
+              [Markup.button.callback('🏠 Головне меню', 'back_to_menu')]
+            ])
+          );
+        }
       }
     }
 
