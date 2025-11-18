@@ -148,15 +148,40 @@ export class AIService {
             },
           });
 
+          // Логуємо структуру відповіді для діагностики
+          console.log('[Gemini] Response structure:', {
+            hasParts: !!response.parts,
+            hasCandidates: !!response.candidates,
+            responseKeys: Object.keys(response || {}),
+          });
+
           // Отримуємо зображення з відповіді
-          for (const part of response.parts) {
+          // Структура може бути: response.parts або response.candidates[0].content.parts
+          let parts = null;
+          
+          if (response.parts && Array.isArray(response.parts)) {
+            parts = response.parts;
+          } else if (response.candidates && response.candidates[0] && response.candidates[0].content) {
+            parts = response.candidates[0].content.parts;
+          } else if (response.candidates && response.candidates[0] && response.candidates[0].parts) {
+            parts = response.candidates[0].parts;
+          } else {
+            console.error('[Gemini] Unexpected response structure:', JSON.stringify(response, null, 2));
+            throw new Error('Unexpected response structure from Gemini API');
+          }
+
+          if (!parts || !Array.isArray(parts)) {
+            console.error('[Gemini] Parts is not an array:', parts);
+            throw new Error('No parts found in Gemini response');
+          }
+
+          for (const part of parts) {
             if (part.inlineData) {
-              // Конвертуємо base64 в Buffer для завантаження в storage
-              const imageBuffer = Buffer.from(part.inlineData.data, 'base64');
-              // Зберігаємо в тимчасовий файл або завантажуємо безпосередньо в storage
-              // Повертаємо base64 data URL, який буде оброблений в storageService
+              // Конвертуємо base64 в data URL
               const dataUrl = `data:image/png;base64,${part.inlineData.data}`;
               imageUrls.push(dataUrl);
+            } else if (part.text) {
+              console.log('[Gemini] Received text instead of image:', part.text);
             }
           }
 
