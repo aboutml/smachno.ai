@@ -9,6 +9,12 @@ export const config = {
   openai: {
     apiKey: (process.env.OPENAI_API_KEY || '').trim(),
   },
+  gemini: {
+    apiKey: (process.env.GEMINI_API_KEY || '').trim(),
+  },
+  ai: {
+    imageModel: process.env.IMAGE_MODEL || 'dall-e-3', // 'dall-e-3' або 'gemini-2.5-flash-image'
+  },
   supabase: {
     url: process.env.SUPABASE_URL,
     key: process.env.SUPABASE_KEY,

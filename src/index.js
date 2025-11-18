@@ -647,11 +647,13 @@ async function processGeneration(ctx, session) {
     const imageDescription = await aiService.analyzeImage(session.originalPhotoUrl);
     
     // Генеруємо зображення з урахуванням стилю
+    // Передаємо originalPhotoUrl для image-to-image редагування через Gemini
     const generatedImages = await aiService.generateImage(
       imageDescription,
       session.style,
       session.customWishes,
-      2 // Завжди 2 варіанти
+      2, // Завжди 2 варіанти
+      session.originalPhotoUrl // Передаємо оригінальне фото для Gemini
     );
 
     // Генеруємо підпис

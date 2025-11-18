@@ -1,9 +1,26 @@
 import OpenAI from 'openai';
+import { GoogleGenAI } from '@google/genai';
+import fetch from 'node-fetch';
 import { config } from '../config.js';
 
 const openai = new OpenAI({
   apiKey: config.openai.apiKey,
 });
+
+// Ініціалізуємо Gemini тільки якщо є API ключ
+let geminiClient = null;
+if (config.gemini.apiKey) {
+  try {
+    geminiClient = new GoogleGenAI({
+      apiKey: config.gemini.apiKey,
+    });
+    console.log('✅ Gemini client initialized successfully');
+  } catch (error) {
+    console.warn('⚠️  Warning: Failed to initialize Gemini client:', error.message);
+  }
+} else {
+  console.log('ℹ️  Gemini API key not set, using DALL-E 3 for image generation');
+}
 
 export class AIService {
   /**
@@ -12,9 +29,171 @@ export class AIService {
    * @param {string} style - Стиль генерації (bright, premium, cozy, wedding, custom)
    * @param {string} customWishes - Додаткові побажання користувача (опціонально)
    * @param {number} n - Кількість варіантів (1-2)
+   * @param {string} originalImageUrl - URL оригінального зображення (для image-to-image редагування через Gemini)
    * @returns {Promise<Array<string>>} Масив URL зображень
    */
-  async generateImage(prompt, style = null, customWishes = null, n = 2) {
+  async generateImage(prompt, style = null, customWishes = null, n = 2, originalImageUrl = null) {
+    // Використовуємо Gemini (Nano Banana) якщо:
+    // 1. Модель явно встановлена як gemini-2.5-flash-image АБО
+    // 2. Gemini клієнт ініціалізований (є API ключ) і є оригінальне зображення (image-to-image редагування)
+    // Gemini краще для image-to-image, тому пріоритет йому
+    const useGemini = config.ai.imageModel === 'gemini-2.5-flash-image' || 
+                      (geminiClient && originalImageUrl);
+    
+    if (useGemini && geminiClient) {
+      try {
+        console.log('🎨 Using Gemini 2.5 Flash Image (Nano Banana) for image-to-image editing');
+        return await this.generateImageWithGemini(prompt, style, customWishes, n, originalImageUrl);
+      } catch (error) {
+        console.error('Gemini generation failed, falling back to DALL-E 3:', error);
+        // Fallback до DALL-E 3
+      }
+    } else if (geminiClient && !originalImageUrl) {
+      console.log('ℹ️  Gemini available but no original image provided, using DALL-E 3');
+    } else if (!geminiClient) {
+      console.log('ℹ️  Gemini not configured, using DALL-E 3');
+    }
+    
+    // Використовуємо DALL-E 3
+    console.log('🎨 Using DALL-E 3 for image generation');
+    return this.generateImageWithDALLE(prompt, style, customWishes, n);
+  }
+
+  /**
+   * Генерує зображення через Gemini 2.5 Flash Image (Nano Banana) з image-to-image редагуванням
+   * @param {string} prompt - Опис зображення
+   * @param {string} style - Стиль генерації
+   * @param {string} customWishes - Додаткові побажання
+   * @param {number} n - Кількість варіантів
+   * @param {string} originalImageUrl - URL оригінального зображення
+   * @returns {Promise<Array<string>>} Масив URL зображень
+   */
+  async generateImageWithGemini(prompt, style = null, customWishes = null, n = 2, originalImageUrl = null) {
+    try {
+      if (!geminiClient) {
+        throw new Error('Gemini client not initialized');
+      }
+
+      // Формуємо промпт для редагування зображення з акцентом на максимальну реалістичність
+      let enhancedPrompt = `Transform this food photography into a highly realistic, professional Instagram-quality image: ${prompt}. 
+        Make it look absolutely photorealistic - like a real professional food photographer took this photo. 
+        Enhance lighting to be natural and flattering, improve composition and styling, add realistic depth of field. 
+        Keep the main subject authentic but make it look premium and appetizing. 
+        Use natural shadows, realistic textures, authentic colors - no artificial or digital-looking effects. 
+        The result should look like a real high-end food photography shot, not AI-generated.`;
+
+      // Додаємо стильові характеристики
+      const stylePrompts = {
+        bright: 'Apply vibrant, juicy colors, fresh and appetizing look, bright natural daylight, colorful realistic background, energetic and lively atmosphere.',
+        premium: 'Transform into luxury realistic pastry shop aesthetic, elegant photorealistic presentation, sophisticated natural styling, premium quality look, refined natural composition, high-end bakery atmosphere.',
+        cozy: 'Apply cozy realistic cafe atmosphere, warm and inviting natural lighting, rustic or vintage realistic style, comfortable and homely feeling, warm natural color palette.',
+        wedding: 'Transform into wedding cake realistic aesthetic, elegant and romantic photorealistic style, soft natural pastel colors, delicate realistic decorations, sophisticated and refined natural appearance.',
+        custom: ''
+      };
+
+      if (style && stylePrompts[style]) {
+        enhancedPrompt += ' ' + stylePrompts[style];
+      }
+
+      if (customWishes && customWishes.trim()) {
+        enhancedPrompt += ` Additional requirements: ${customWishes}.`;
+      }
+
+      enhancedPrompt += ' Absolutely photorealistic, hyper-realistic, looks like real professional photography, no illustration style, no cartoon, no digital art, no AI-generated look, real camera photo quality.';
+
+      const imageUrls = [];
+
+      // Завантажуємо оригінальне зображення
+      let imageData = null;
+      if (originalImageUrl) {
+        try {
+          const imageResponse = await fetch(originalImageUrl);
+          const imageBuffer = await imageResponse.arrayBuffer();
+          imageData = Buffer.from(imageBuffer).toString('base64');
+        } catch (error) {
+          console.error('Error loading original image for Gemini:', error);
+          // Якщо не вдалося завантажити, використовуємо text-to-image
+          originalImageUrl = null;
+        }
+      }
+
+      // Генеруємо зображення
+      for (let i = 0; i < Math.min(n, 2); i++) {
+        try {
+          let contents;
+          
+          if (originalImageUrl && imageData) {
+            // Image-to-image редагування
+            contents = [
+              { text: enhancedPrompt },
+              {
+                inlineData: {
+                  mimeType: 'image/jpeg',
+                  data: imageData,
+                },
+              },
+            ];
+          } else {
+            // Text-to-image (якщо не вдалося завантажити оригінал)
+            contents = enhancedPrompt;
+          }
+
+          const response = await geminiClient.models.generateContent({
+            model: 'gemini-2.5-flash-image',
+            contents: contents,
+            config: {
+              imageConfig: {
+                aspectRatio: '1:1', // Instagram квадрат
+              },
+            },
+          });
+
+          // Отримуємо зображення з відповіді
+          for (const part of response.parts) {
+            if (part.inlineData) {
+              // Конвертуємо base64 в Buffer для завантаження в storage
+              const imageBuffer = Buffer.from(part.inlineData.data, 'base64');
+              // Зберігаємо в тимчасовий файл або завантажуємо безпосередньо в storage
+              // Повертаємо base64 data URL, який буде оброблений в storageService
+              const dataUrl = `data:image/png;base64,${part.inlineData.data}`;
+              imageUrls.push(dataUrl);
+            }
+          }
+
+          // Затримка між запитами
+          if (i < n - 1) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            // Для другого варіанту трохи змінюємо промпт
+            enhancedPrompt += ' Different angle, alternative composition, slightly different styling and perspective.';
+          }
+        } catch (error) {
+          console.error(`Error generating image ${i + 1} with Gemini:`, error);
+          // Продовжуємо з наступним варіантом
+        }
+      }
+
+      if (imageUrls.length === 0) {
+        throw new Error('No images generated');
+      }
+
+      return imageUrls;
+    } catch (error) {
+      console.error('Error generating image with Gemini:', error);
+      // Fallback до DALL-E 3
+      console.log('Falling back to DALL-E 3');
+      return this.generateImageWithDALLE(prompt, style, customWishes, n);
+    }
+  }
+
+  /**
+   * Генерує зображення через DALL-E 3
+   * @param {string} prompt - Опис зображення
+   * @param {string} style - Стиль генерації
+   * @param {string} customWishes - Додаткові побажання
+   * @param {number} n - Кількість варіантів
+   * @returns {Promise<Array<string>>} Масив URL зображень
+   */
+  async generateImageWithDALLE(prompt, style = null, customWishes = null, n = 2) {
     try {
       // Базовий промпт з акцентом на реалістичність
       let enhancedPrompt = `Professional realistic food photography: ${prompt}. 
@@ -42,7 +221,7 @@ export class AIService {
       }
       
       // Додаємо фінальне нагадування про реалістичність
-      enhancedPrompt += ' Photorealistic, no illustration style, no cartoon, no digital art, real photography.';
+      enhancedPrompt += ' Absolutely photorealistic, hyper-realistic, looks like real professional photography, no illustration style, no cartoon, no digital art, no AI-generated look, real camera photo quality.';
 
       const response = await openai.images.generate({
         model: 'dall-e-3',

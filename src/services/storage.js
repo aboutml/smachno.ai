@@ -49,18 +49,27 @@ export class StorageService {
 
   /**
    * Зберігає згенероване зображення
-   * @param {string} imageUrl - URL згенерованого зображення
+   * @param {string} imageUrl - URL згенерованого зображення або base64 data URL
    * @param {string} fileName - Ім'я файлу
    * @returns {Promise<string>} Public URL збереженого файлу
    */
   async saveGeneratedImage(imageUrl, fileName) {
     try {
-      // Завантажуємо згенероване зображення
-      const response = await axios.get(imageUrl, {
-        responseType: 'arraybuffer',
-      });
+      let fileBuffer;
 
-      const fileBuffer = Buffer.from(response.data);
+      // Перевіряємо, чи це base64 data URL (від Gemini)
+      if (imageUrl.startsWith('data:image/')) {
+        // Виділяємо base64 дані з data URL
+        const base64Data = imageUrl.split(',')[1];
+        fileBuffer = Buffer.from(base64Data, 'base64');
+      } else {
+        // Завантажуємо згенероване зображення з HTTP URL
+        const response = await axios.get(imageUrl, {
+          responseType: 'arraybuffer',
+        });
+        fileBuffer = Buffer.from(response.data);
+      }
+
       const filePath = `generated/${Date.now()}_${fileName}`;
 
       // Завантажуємо в Supabase Storage

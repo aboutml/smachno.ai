@@ -21,6 +21,7 @@
   "dependencies": {
     "telegraf": "^4.15.3",
     "openai": "^4.28.0",
+    "@google/genai": "^1.0.0",
     "@supabase/supabase-js": "^2.39.3",
     "dotenv": "^16.4.1",
     "axios": "^1.6.7",
