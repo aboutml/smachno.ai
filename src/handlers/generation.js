@@ -63,55 +63,113 @@ export async function processGeneration(ctx, session) {
     setSession(ctx.from.id, currentSession);
     console.log(`[generation] Set isGenerating=true for user ${ctx.from.id}`);
 
+    // Перевіряємо тип контенту
+    const contentType = session.contentType || 'photo';
+    const isVideo = contentType === 'video';
+
     // Показуємо повідомлення про генерацію
-    await ctx.reply('Працюю над твоїм смачним фото… Це займе до хвилини ⏳');
+    if (isVideo) {
+      await ctx.reply('Працюю над твоїм відео для Reels… Це займе 2-5 хвилин ⏳');
+    } else {
+      await ctx.reply('Працюю над твоїм смачним фото… Це займе до хвилини ⏳');
+    }
 
     // Аналізуємо фото
     const imageDescription = await aiService.analyzeImage(session.originalPhotoUrl);
     
-    // Генеруємо зображення з урахуванням стилю та локації
-    const generatedImages = await aiService.generateImage(
-      imageDescription,
-      session.style,
-      session.customWishes,
-      2, // Завжди 2 варіанти
-      session.originalPhotoUrl,
-      session.location || null
-    );
-
-    // Генеруємо підпис
-    const caption = await aiService.generateCaption(imageDescription, imageDescription);
-
-    // Зберігаємо креативи
     const userData = await db.createOrUpdateUser(ctx.from.id, {
       username: ctx.from.username,
       first_name: ctx.from.first_name,
     });
 
-    const savedImageUrls = [];
-    for (const imageUrl of generatedImages) {
+    // Генеруємо підпис
+    const caption = await aiService.generateCaption(imageDescription, imageDescription);
+
+    if (isVideo) {
+      // Генеруємо відео
+      // Спочатку генеруємо фото для використання як основу для відео
+      const generatedImages = await aiService.generateImage(
+        imageDescription,
+        session.style,
+        session.customWishes,
+        1, // Тільки 1 фото для відео
+        session.originalPhotoUrl,
+        session.location || null
+      );
+
+      // Зберігаємо фото
       const savedImageUrl = await storageService.saveGeneratedImage(
-        imageUrl,
+        generatedImages[0],
         `${ctx.from.id}_${Date.now()}.png`
       );
-      savedImageUrls.push(savedImageUrl);
 
+      // Генеруємо відео на основі згенерованого фото
+      const videoBuffer = await aiService.generateVideo(
+        savedImageUrl,
+        imageDescription,
+        session.style,
+        session.location || null,
+        6 // 6 секунд для Reels (найближче до 5)
+      );
+
+      // Зберігаємо відео
+      const savedVideoUrl = await storageService.saveGeneratedVideo(
+        videoBuffer,
+        `${ctx.from.id}_${Date.now()}.mp4`
+      );
+
+      // Зберігаємо креатив
       await db.saveCreative(userData.id, {
         originalPhotoUrl: session.originalPhotoUrl,
         prompt: imageDescription,
-        generatedImageUrl: savedImageUrl,
+        generatedImageUrl: savedImageUrl, // Зберігаємо також фото
+        generatedVideoUrl: savedVideoUrl,
+        contentType: 'video',
         caption,
       });
-    }
 
-    // Відправляємо результат
-    await ctx.reply('Готово! Ось два варіанти твого оновленого фото 🍰✨');
-
-    // Використовуємо збережені URL з Supabase Storage
-    for (let i = 0; i < savedImageUrls.length; i++) {
-      await ctx.replyWithPhoto(savedImageUrls[i], {
-        caption: `Варіант ${i + 1}`,
+      // Відправляємо результат
+      await ctx.reply('Готово! Ось твоє відео для Reels 🎬✨');
+      await ctx.replyWithVideo(savedVideoUrl, {
+        caption: 'Твоє відео готове для Instagram Reels!',
       });
+    } else {
+      // Генеруємо зображення з урахуванням стилю та локації
+      const generatedImages = await aiService.generateImage(
+        imageDescription,
+        session.style,
+        session.customWishes,
+        2, // Завжди 2 варіанти
+        session.originalPhotoUrl,
+        session.location || null
+      );
+
+      const savedImageUrls = [];
+      for (const imageUrl of generatedImages) {
+        const savedImageUrl = await storageService.saveGeneratedImage(
+          imageUrl,
+          `${ctx.from.id}_${Date.now()}.png`
+        );
+        savedImageUrls.push(savedImageUrl);
+
+        await db.saveCreative(userData.id, {
+          originalPhotoUrl: session.originalPhotoUrl,
+          prompt: imageDescription,
+          generatedImageUrl: savedImageUrl,
+          contentType: 'image',
+          caption,
+        });
+      }
+
+      // Відправляємо результат
+      await ctx.reply('Готово! Ось два варіанти твого оновленого фото 🍰✨');
+
+      // Використовуємо збережені URL з Supabase Storage
+      for (let i = 0; i < savedImageUrls.length; i++) {
+        await ctx.replyWithPhoto(savedImageUrls[i], {
+          caption: `Варіант ${i + 1}`,
+        });
+      }
     }
 
     // Показуємо опис з хештегами для поста

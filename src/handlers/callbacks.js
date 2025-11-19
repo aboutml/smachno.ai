@@ -7,6 +7,7 @@ import {
   mainMenuKeyboard, 
   styleSelectionKeyboard,
   locationSelectionKeyboard,
+  contentTypeSelectionKeyboard,
   stylesMenuKeyboard, 
   categoryKeyboard,
   settingsKeyboard,
@@ -67,11 +68,66 @@ export const registerCallbacks = (bot) => {
       session.location = location;
       setSession(ctx.from.id, session);
 
-      await ctx.editMessageText('Чудово! Починаю генерувати 😋\n\nЦе займе близько 1 хвилини.');
+      // Показуємо вибір типу контенту (фото/відео)
+      await ctx.editMessageText('Обери тип контенту 👇', {
+        reply_markup: contentTypeSelectionKeyboard,
+      });
+      await ctx.answerCbQuery();
+    } catch (error) {
+      console.error('Error handling location selection:', error);
+      await ctx.answerCbQuery('Помилка при обробці. Спробуй ще раз.');
+    }
+  });
+
+  // Обробка вибору типу контенту
+  bot.action(/^content_(photo|video)$/, async (ctx) => {
+    try {
+      const contentType = ctx.match[1];
+      const session = getSession(ctx.from.id);
+      
+      if (!session || !session.originalPhotoUrl) {
+        await ctx.answerCbQuery('Помилка: фото не знайдено. Надішли фото спочатку.');
+        return;
+      }
+
+      // Оновлюємо тип контенту в сесії
+      session.contentType = contentType;
+      setSession(ctx.from.id, session);
+
+      if (contentType === 'video') {
+        await ctx.editMessageText('Чудово! Починаю генерувати відео для Reels 🎬\n\nЦе займе 2-5 хвилин ⏳');
+      } else {
+        await ctx.editMessageText('Чудово! Починаю генерувати 😋\n\nЦе займе близько 1 хвилини.');
+      }
+      
       await ctx.answerCbQuery();
       await processGeneration(ctx, session);
     } catch (error) {
-      console.error('Error handling location selection:', error);
+      console.error('Error handling content type selection:', error);
+      await ctx.answerCbQuery('Помилка при обробці. Спробуй ще раз.');
+    }
+  });
+
+  // Обробка повернення до вибору локації
+  bot.action('back_to_location', async (ctx) => {
+    try {
+      const session = getSession(ctx.from.id);
+      
+      if (!session || !session.originalPhotoUrl) {
+        await ctx.answerCbQuery('Помилка: фото не знайдено. Надішли фото спочатку.');
+        return;
+      }
+
+      // Очищаємо тип контенту
+      delete session.contentType;
+      setSession(ctx.from.id, session);
+
+      await ctx.editMessageText('Обери локацію/фон для фото 👇', {
+        reply_markup: locationSelectionKeyboard,
+      });
+      await ctx.answerCbQuery();
+    } catch (error) {
+      console.error('Error handling back to location:', error);
       await ctx.answerCbQuery('Помилка при обробці. Спробуй ще раз.');
     }
   });
@@ -385,13 +441,21 @@ export const registerCallbacks = (bot) => {
       for (let i = 0; i < creatives.length; i++) {
         const creative = creatives[i];
         const isLast = i === creatives.length - 1;
+        const contentType = creative.content_type || 'image';
         
         try {
-          if (creative.generated_image_url) {
-            const caption = creative.caption 
-              ? `${creative.caption}\n\n📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}`
-              : `📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}`;
-            
+          const caption = creative.caption 
+            ? `${creative.caption}\n\n📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}`
+            : `📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}`;
+          
+          if (contentType === 'video' && creative.generated_video_url) {
+            // Відправляємо відео
+            await ctx.replyWithVideo(creative.generated_video_url, {
+              caption: caption.substring(0, 1024),
+              reply_markup: isLast ? creativeKeyboard : undefined,
+            });
+          } else if (creative.generated_image_url) {
+            // Відправляємо фото
             await ctx.replyWithPhoto(creative.generated_image_url, {
               caption: caption.substring(0, 1024),
               reply_markup: isLast ? creativeKeyboard : undefined,
@@ -404,7 +468,7 @@ export const registerCallbacks = (bot) => {
         } catch (error) {
           console.error(`[my_creatives] Error sending creative ${creative.id}:`, error);
           try {
-            await ctx.reply(`📄 Креатив #${creative.id}\n${creative.caption || 'Без опису'}\n📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}\n\n⚠️ Не вдалося завантажити зображення`, {
+            await ctx.reply(`📄 Креатив #${creative.id}\n${creative.caption || 'Без опису'}\n📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}\n\n⚠️ Не вдалося завантажити ${contentType === 'video' ? 'відео' : 'зображення'}`, {
               reply_markup: isLast ? creativeKeyboard : undefined,
             });
           } catch (e) {

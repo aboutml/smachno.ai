@@ -368,6 +368,147 @@ ${imageDescription ? `\nОпис зображення: ${imageDescription}` : ''
       return 'Фото виробу для Instagram-посту';
     }
   }
+
+
+  /**
+   * Генерує відео на основі зображення та промпту через Veo 3.1
+   * @param {string} imageUrl - URL зображення для image-to-video генерації
+   * @param {string} prompt - Текстовий опис для відео
+   * @param {string} style - Стиль генерації
+   * @param {string} location - Локація/фон
+   * @param {number} duration - Тривалість відео в секундах (4, 6, або 8)
+   * @returns {Promise<Buffer>} Buffer з відео даними
+   */
+  async generateVideo(imageUrl, prompt, style = null, location = null, duration = 6) {
+    try {
+      if (!geminiClient) {
+        throw new Error('Gemini client not initialized');
+      }
+
+      console.log('🎬 Using Veo 3.1 for video generation');
+
+      // Формуємо промпт для відео
+      let videoPrompt = prompt;
+      
+      // Додаємо стильові характеристики
+      const stylePrompts = {
+        bright: 'vibrant, juicy colors, fresh and appetizing look, bright natural daylight, colorful realistic background, energetic and lively atmosphere.',
+        premium: 'luxury realistic pastry shop aesthetic, elegant photorealistic presentation, sophisticated natural styling, premium quality look, refined natural composition, high-end bakery atmosphere.',
+        cozy: 'cozy realistic cafe atmosphere, warm and inviting natural lighting, rustic or vintage realistic style, comfortable and homely feeling, warm natural color palette.',
+        wedding: 'wedding cake realistic aesthetic, elegant and romantic photorealistic style, soft natural pastel colors, delicate realistic decorations, sophisticated and refined natural appearance.',
+        custom: ''
+      };
+
+      if (style && stylePrompts[style]) {
+        videoPrompt += ' ' + stylePrompts[style];
+      }
+
+      // Додаємо опис локації/фону
+      const locationPrompts = {
+        home: 'Set in a cozy home kitchen environment, natural home lighting, domestic atmosphere, warm and inviting background, home-style presentation.',
+        cafe: 'Set in a cozy cafe environment, cafe interior background, warm cafe lighting, coffee shop atmosphere, rustic cafe setting.',
+        restaurant: 'Set in an elegant restaurant environment, fine dining restaurant background, sophisticated restaurant lighting, upscale restaurant atmosphere.',
+        shop: 'Set in a bakery or pastry shop display window, shop window background, commercial display lighting, retail shop atmosphere, professional shop presentation.',
+        studio: 'Set in a professional photography studio, clean studio background, professional studio lighting, minimalist studio setting, high-end studio photography.',
+        outdoor: 'Set in an outdoor natural environment, natural outdoor lighting, outdoor background, fresh outdoor atmosphere, natural setting.',
+        celebration: 'Set in a festive celebration environment, party or celebration background, festive lighting, celebration atmosphere, special occasion setting.',
+        none: ''
+      };
+
+      if (location && locationPrompts[location]) {
+        videoPrompt += ' ' + locationPrompts[location];
+      }
+
+      videoPrompt += ' Absolutely photorealistic, hyper-realistic, looks like real professional video, smooth camera movement, cinematic quality, perfect for Instagram Reels, vertical format 9:16.';
+
+      // Завантажуємо зображення
+      let imageData = null;
+      try {
+        const imageResponse = await fetch(imageUrl);
+        const imageBuffer = await imageResponse.arrayBuffer();
+        imageData = Buffer.from(imageBuffer);
+      } catch (error) {
+        console.error('Error loading image for Veo:', error);
+        throw new Error('Failed to load image for video generation');
+      }
+
+      // Завантажуємо зображення як файл в Gemini Files API
+      const uploadedFile = await geminiClient.files.upload({
+        fileData: imageData,
+        mimeType: 'image/jpeg',
+      });
+
+      console.log(`[Veo] Image uploaded, file URI: ${uploadedFile.uri}`);
+
+      // Обмежуємо duration до дозволених значень (4, 6, 8)
+      // Для Reels використовуємо 5 секунд, але Veo підтримує тільки 4, 6, 8
+      const validDuration = duration <= 4 ? 4 : duration <= 6 ? 6 : 8;
+
+      // Генеруємо відео через Veo 3.1 Fast (швидша версія)
+      // Згідно з документацією, передаємо файл напряму
+      let operation = await geminiClient.models.generateVideos({
+        model: 'veo-3.1-fast-generate-preview',
+        prompt: videoPrompt,
+        image: uploadedFile, // Передаємо завантажений файл
+        duration: validDuration,
+      });
+
+      console.log(`[Veo] Video generation started, operation: ${operation.name}`);
+
+      // Поллімо статус операції (за документацією - кожні 10 секунд)
+      let pollCount = 0;
+      const maxPolls = 60; // Максимум 10 хвилин (60 * 10 секунд)
+      
+      while (!operation.done && pollCount < maxPolls) {
+        console.log(`[Veo] Polling status... (${pollCount + 1}/${maxPolls})`);
+        await new Promise((resolve) => setTimeout(resolve, 10000)); // Чекаємо 10 секунд
+        
+        operation = await geminiClient.operations.getVideosOperation({
+          operation: operation,
+        });
+        
+        pollCount++;
+      }
+
+      if (!operation.done) {
+        throw new Error('Video generation timeout - operation took too long');
+      }
+
+      if (operation.error) {
+        throw new Error(`Video generation failed: ${operation.error.message || 'Unknown error'}`);
+      }
+
+      // Отримуємо згенероване відео
+      const generatedVideo = operation.response.generatedVideos[0];
+      if (!generatedVideo || !generatedVideo.video) {
+        throw new Error('No video generated in response');
+      }
+
+      console.log(`[Veo] Video generated successfully, URI: ${generatedVideo.video.uri}`);
+
+      // Завантажуємо відео
+      const videoData = await geminiClient.files.download({
+        file: generatedVideo.video,
+      });
+
+      // Конвертуємо в Buffer (якщо це не Buffer вже)
+      const videoBuffer = Buffer.isBuffer(videoData) ? videoData : Buffer.from(videoData);
+
+      return videoBuffer;
+
+    } catch (error) {
+      console.error('Error generating video with Veo:', error);
+      
+      // Повертаємо зрозуміле повідомлення про помилку
+      if (error.message.includes('quota') || error.message.includes('429')) {
+        throw new Error('Досягнуто ліміт генерації відео. Спробуй пізніше.');
+      } else if (error.message.includes('safety')) {
+        throw new Error('Відео не може бути згенероване через обмеження безпеки.');
+      } else {
+        throw new Error(`Помилка генерації відео: ${error.message}`);
+      }
+    }
+  }
 }
 
 export const aiService = new AIService();

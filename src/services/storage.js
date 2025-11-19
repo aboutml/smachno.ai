@@ -97,6 +97,41 @@ export class StorageService {
       return imageUrl;
     }
   }
+
+  /**
+   * Зберігає згенероване відео
+   * @param {Buffer} videoBuffer - Buffer з відео даними
+   * @param {string} fileName - Ім'я файлу
+   * @returns {Promise<string>} Public URL збереженого відео
+   */
+  async saveGeneratedVideo(videoBuffer, fileName) {
+    try {
+      const filePath = `generated/videos/${Date.now()}_${fileName}`;
+
+      // Завантажуємо в Supabase Storage
+      const { data, error } = await supabase.storage
+        .from('creatives')
+        .upload(filePath, videoBuffer, {
+          contentType: 'video/mp4',
+          upsert: false,
+        });
+
+      if (error) {
+        console.error('Error saving generated video:', error);
+        throw error;
+      }
+
+      // Отримуємо public URL
+      const { data: urlData } = supabase.storage
+        .from('creatives')
+        .getPublicUrl(filePath);
+
+      return urlData.publicUrl;
+    } catch (error) {
+      console.error('Error in saveGeneratedVideo:', error);
+      throw error;
+    }
+  }
 }
 
 export const storageService = new StorageService();

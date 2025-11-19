@@ -44,6 +44,17 @@ export const locationSelectionKeyboard = {
 };
 
 /**
+ * Клавіатура вибору типу контенту (фото/відео)
+ */
+export const contentTypeSelectionKeyboard = {
+  inline_keyboard: [
+    [{ text: '📸 Фото (2 варіанти)', callback_data: 'content_photo' }],
+    [{ text: '🎬 Відео для Reels (5 сек)', callback_data: 'content_video' }],
+    [{ text: '🔙 Назад до локації', callback_data: 'back_to_location' }]
+  ],
+};
+
+/**
  * Клавіатура після генерації
  */
 export const postGenerationKeyboard = {

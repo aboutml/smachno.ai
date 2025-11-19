@@ -89,7 +89,9 @@ export class Database {
         user_id: userId,
         original_photo_url: creativeData.originalPhotoUrl,
         prompt: creativeData.prompt,
-        generated_image_url: creativeData.generatedImageUrl,
+        generated_image_url: creativeData.generatedImageUrl || null,
+        generated_video_url: creativeData.generatedVideoUrl || null,
+        content_type: creativeData.contentType || 'image',
         caption: creativeData.caption,
       })
       .select()
