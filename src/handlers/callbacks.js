@@ -52,6 +52,41 @@ export const registerCallbacks = (bot) => {
   // Регенерація з тим самим фото
   bot.action('regenerate_same', async (ctx) => {
     try {
+      // Перевіряємо доступні генерації перед показом вибору стилю
+      const user = await db.getUserByTelegramId(ctx.from.id);
+      const freeGenerationsUsed = user?.free_generations_used || 0;
+      const canGenerateFree = freeGenerationsUsed < config.app.freeGenerations;
+      const availablePaidGenerations = await db.getAvailablePaidGenerations(ctx.from.id);
+
+      // Якщо немає доступних генерацій - показуємо оплату
+      if (!canGenerateFree && availablePaidGenerations === 0) {
+        try {
+          const payment = await paymentService.createPayment(ctx.from.id);
+          const userData = await db.createOrUpdateUser(ctx.from.id, {
+            username: ctx.from.username,
+            first_name: ctx.from.first_name,
+          });
+          await db.createPayment(userData.id, payment.amount * 100, config.payment.currency, payment.orderId);
+          
+          await ctx.editMessageText(
+            `💰 Для створення креативу потрібна оплата ${payment.amount} грн за 1 генерацію (2 варіанти зображень).\n\n` +
+            `Натисни кнопку нижче для оплати:`,
+            createPaymentKeyboard(payment.checkoutUrl)
+          );
+          await ctx.answerCbQuery();
+          return;
+        } catch (paymentError) {
+          console.error('[regenerate_same] Payment creation error:', paymentError);
+          await ctx.editMessageText(
+            `💰 Для створення креативу потрібна оплата ${config.payment.amount} грн за 1 генерацію (2 варіанти зображень).\n\n` +
+            `⚠️ Помилка створення платежу. Спробуй ще раз або звернись до підтримки.`,
+            { reply_markup: backKeyboard }
+          );
+          await ctx.answerCbQuery();
+          return;
+        }
+      }
+
       let session = await getOrCreateSessionWithLastPhoto(ctx.from.id, db);
       
       if (!session || !session.originalPhotoUrl) {
@@ -72,6 +107,41 @@ export const registerCallbacks = (bot) => {
   // Зміна стилю
   bot.action('change_style', async (ctx) => {
     try {
+      // Перевіряємо доступні генерації перед показом вибору стилю
+      const user = await db.getUserByTelegramId(ctx.from.id);
+      const freeGenerationsUsed = user?.free_generations_used || 0;
+      const canGenerateFree = freeGenerationsUsed < config.app.freeGenerations;
+      const availablePaidGenerations = await db.getAvailablePaidGenerations(ctx.from.id);
+
+      // Якщо немає доступних генерацій - показуємо оплату
+      if (!canGenerateFree && availablePaidGenerations === 0) {
+        try {
+          const payment = await paymentService.createPayment(ctx.from.id);
+          const userData = await db.createOrUpdateUser(ctx.from.id, {
+            username: ctx.from.username,
+            first_name: ctx.from.first_name,
+          });
+          await db.createPayment(userData.id, payment.amount * 100, config.payment.currency, payment.orderId);
+          
+          await ctx.editMessageText(
+            `💰 Для створення креативу потрібна оплата ${payment.amount} грн за 1 генерацію (2 варіанти зображень).\n\n` +
+            `Натисни кнопку нижче для оплати:`,
+            createPaymentKeyboard(payment.checkoutUrl)
+          );
+          await ctx.answerCbQuery();
+          return;
+        } catch (paymentError) {
+          console.error('[change_style] Payment creation error:', paymentError);
+          await ctx.editMessageText(
+            `💰 Для створення креативу потрібна оплата ${config.payment.amount} грн за 1 генерацію (2 варіанти зображень).\n\n` +
+            `⚠️ Помилка створення платежу. Спробуй ще раз або звернись до підтримки.`,
+            { reply_markup: backKeyboard }
+          );
+          await ctx.answerCbQuery();
+          return;
+        }
+      }
+
       let session = await getOrCreateSessionWithLastPhoto(ctx.from.id, db);
       
       if (!session || !session.originalPhotoUrl) {
