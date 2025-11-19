@@ -339,14 +339,14 @@ export class Database {
         console.warn(`[updatePaymentStatus] Cannot increment total_paid: userId=${userIdToUpdate}, amount=${paymentAmount}`);
       }
     } else if (status === 'refunded' && oldStatus === 'completed') {
-      // Платіж був успішним, але тепер рефанд - зменшуємо total_paid та віднімаємо генерації
+      // Платіж був успішним, але тепер рефанд - зменшуємо total_paid
+      // НЕ віднімаємо доступні генерації - залишаємо їх користувачу (добрі до користувачів)
       if (userIdToUpdate && paymentAmount > 0) {
         console.log(`[updatePaymentStatus] Decrementing total_paid for user ${userIdToUpdate} by ${paymentAmount} (refund)`);
         await this.decrementUserTotalPaid(userIdToUpdate, paymentAmount);
         
-        // Віднімаємо доступні оплачені генерації
-        const paidGenerationsPerPayment = config.app.paidGenerationsPerPayment || 2;
-        await this.removePaidGenerations(userIdToUpdate, paidGenerationsPerPayment);
+        // Не віднімаємо доступні генерації при рефанді - користувач залишається з ними
+        console.log(`[updatePaymentStatus] Keeping paid generations for user ${userIdToUpdate} (being nice to users)`);
       } else {
         console.warn(`[updatePaymentStatus] Cannot decrement total_paid: userId=${userIdToUpdate}, amount=${paymentAmount}`);
       }

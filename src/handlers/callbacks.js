@@ -1,0 +1,342 @@
+import { Markup } from 'telegraf';
+import { config } from '../config.js';
+import { db } from '../db/database.js';
+import { paymentService } from '../services/payment.js';
+import { getSession, setSession, deleteSession, getOrCreateSessionWithLastPhoto } from '../utils/sessions.js';
+import { 
+  mainMenuKeyboard, 
+  styleSelectionKeyboard, 
+  stylesMenuKeyboard, 
+  categoryKeyboard,
+  settingsKeyboard,
+  creativeKeyboard,
+  backKeyboard,
+  createPaymentKeyboard
+} from '../utils/keyboards.js';
+import { getWelcomeMessage, getAboutMessage, getHelpMessage, getSettingsMessage } from '../utils/messages.js';
+import { processGeneration } from './generation.js';
+
+/**
+ * Реєстрація всіх callback обробників
+ */
+export const registerCallbacks = (bot) => {
+  // Обробка вибору стилю
+  bot.action(/^style_(bright|premium|cozy|wedding|custom)$/, async (ctx) => {
+    try {
+      const style = ctx.match[1];
+      const session = getSession(ctx.from.id);
+      
+      if (!session || !session.originalPhotoUrl) {
+        await ctx.answerCbQuery('Помилка: фото не знайдено. Надішли фото спочатку.');
+        return;
+      }
+
+      // Оновлюємо стиль в сесії
+      session.style = style;
+      setSession(ctx.from.id, session);
+
+      if (style === 'custom') {
+        await ctx.editMessageText('Напиши додаткові побажання до стилю — що підкреслити, змінити чи додати.');
+        await ctx.answerCbQuery();
+      } else {
+        await ctx.editMessageText('Чудово! Починаю генерувати 😋\n\nЦе займе близько 1 хвилини.');
+        await ctx.answerCbQuery();
+        await processGeneration(ctx, session);
+      }
+    } catch (error) {
+      console.error('Error handling style selection:', error);
+      await ctx.answerCbQuery('Помилка при обробці. Спробуй ще раз.');
+    }
+  });
+
+  // Регенерація з тим самим фото
+  bot.action('regenerate_same', async (ctx) => {
+    try {
+      let session = await getOrCreateSessionWithLastPhoto(ctx.from.id, db);
+      
+      if (!session || !session.originalPhotoUrl) {
+        await ctx.answerCbQuery('Помилка: фото не знайдено. Надішли фото спочатку.');
+        return;
+      }
+      
+      await ctx.editMessageText('Обери стиль для покращеного фото 👇', {
+        reply_markup: styleSelectionKeyboard,
+      });
+      await ctx.answerCbQuery();
+    } catch (error) {
+      console.error('Error handling regenerate:', error);
+      await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
+    }
+  });
+
+  // Зміна стилю
+  bot.action('change_style', async (ctx) => {
+    try {
+      let session = await getOrCreateSessionWithLastPhoto(ctx.from.id, db);
+      
+      if (!session || !session.originalPhotoUrl) {
+        await ctx.answerCbQuery('Помилка: фото не знайдено. Надішли фото спочатку.');
+        return;
+      }
+      
+      // Скидаємо стиль та показуємо вибір знову
+      session.style = null;
+      session.customWishes = null;
+      setSession(ctx.from.id, session);
+      
+      await ctx.editMessageText('Обери стиль для покращеного фото 👇', {
+        reply_markup: styleSelectionKeyboard,
+      });
+      await ctx.answerCbQuery();
+    } catch (error) {
+      console.error('Error handling change style:', error);
+      await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
+    }
+  });
+
+  // Нове фото
+  bot.action('new_photo', async (ctx) => {
+    try {
+      deleteSession(ctx.from.id);
+      await ctx.editMessageText('Надішли нове фото десерту, який хочеш покращити 🍰✨');
+      await ctx.answerCbQuery();
+    } catch (error) {
+      console.error('Error handling new photo:', error);
+      await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
+    }
+  });
+
+  // Категорії стилів/пресетів
+  bot.action(/^style_(cakes|cupcakes|donuts|drinks|cookies|desserts)$/, async (ctx) => {
+    try {
+      const category = ctx.match[1];
+      const categoryNames = {
+        cakes: 'Торти',
+        cupcakes: 'Капкейки',
+        donuts: 'Пончики',
+        drinks: 'Напої',
+        cookies: 'Печиво',
+        desserts: 'Десерти'
+      };
+      
+      await ctx.editMessageText(
+        `🍰 Приклади ${categoryNames[category]} для натхнення:\n\n` +
+        `(Тут будуть показані приклади AI-фото)\n\n` +
+        `Це лише для натхнення. Для генерації своїх фото натисни кнопку нижче 👇`,
+        { reply_markup: categoryKeyboard }
+      );
+      await ctx.answerCbQuery();
+    } catch (error) {
+      console.error('Error handling style category:', error);
+      await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
+    }
+  });
+
+  // Генерація власного фото
+  bot.action('generate_own', async (ctx) => {
+    try {
+      await ctx.editMessageText('Надішли фото десерту, який хочеш покращити 🍰✨');
+      await ctx.answerCbQuery();
+    } catch (error) {
+      console.error('Error handling generate own:', error);
+      await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
+    }
+  });
+
+  // Генерація фото (перевірка оплати)
+  bot.action('generate_photo', async (ctx) => {
+    try {
+      const user = await db.getUserByTelegramId(ctx.from.id);
+      const freeGenerationsUsed = user?.free_generations_used || 0;
+      const canGenerateFree = freeGenerationsUsed < config.app.freeGenerations;
+      const availablePaidGenerations = await db.getAvailablePaidGenerations(ctx.from.id);
+
+      console.log(`[generate_photo] User ${ctx.from.id}, free generations used: ${freeGenerationsUsed}/${config.app.freeGenerations}, can generate free: ${canGenerateFree}, available paid: ${availablePaidGenerations}`);
+
+      if (!canGenerateFree && availablePaidGenerations === 0) {
+        try {
+          const payment = await paymentService.createPayment(ctx.from.id);
+          const userData = await db.createOrUpdateUser(ctx.from.id, {
+            username: ctx.from.username,
+            first_name: ctx.from.first_name,
+          });
+          await db.createPayment(userData.id, payment.amount * 100, config.payment.currency, payment.orderId);
+          
+          await ctx.editMessageText(
+            `💰 Для створення креативу потрібна оплата ${payment.amount} грн за 1 генерацію (2 варіанти зображень).\n\n` +
+            `Натисни кнопку нижче для оплати:`,
+            createPaymentKeyboard(payment.checkoutUrl)
+          );
+          await ctx.answerCbQuery();
+          return;
+        } catch (paymentError) {
+          console.error('[generate_photo] Payment creation error:', paymentError);
+          await ctx.editMessageText(
+            `💰 Для створення креативу потрібна оплата ${config.payment.amount} грн за 1 генерацію (2 варіанти зображень).\n\n` +
+            `⚠️ Помилка створення платежу. Спробуй ще раз або звернись до підтримки.`,
+            { reply_markup: backKeyboard }
+          );
+          await ctx.answerCbQuery();
+          return;
+        }
+      }
+
+      await ctx.editMessageText('Надішли фото десерту, який хочеш покращити 🍰✨', {
+        reply_markup: backKeyboard,
+      });
+      await ctx.answerCbQuery();
+    } catch (error) {
+      console.error('Error handling generate photo:', error);
+      await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
+    }
+  });
+
+  // Меню стилів/пресетів
+  bot.action('styles_menu', async (ctx) => {
+    try {
+      await ctx.editMessageText('Обери категорію для натхнення 👇', {
+        reply_markup: stylesMenuKeyboard,
+      });
+      await ctx.answerCbQuery();
+    } catch (error) {
+      console.error('Error handling styles menu:', error);
+      await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
+    }
+  });
+
+  // Про бота
+  bot.action('about', async (ctx) => {
+    try {
+      await ctx.editMessageText(getAboutMessage(), {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [[{ text: '🏠 Головне меню', callback_data: 'back_to_menu' }]],
+        },
+      });
+      await ctx.answerCbQuery();
+    } catch (error) {
+      console.error('Error handling about:', error);
+      await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
+    }
+  });
+
+  // Налаштування
+  bot.action('settings', async (ctx) => {
+    try {
+      await ctx.editMessageText(getSettingsMessage(), {
+        parse_mode: 'HTML',
+        reply_markup: settingsKeyboard,
+      });
+      await ctx.answerCbQuery();
+    } catch (error) {
+      console.error('Error handling settings:', error);
+      await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
+    }
+  });
+
+  // Мої креативи
+  bot.action('my_creatives', async (ctx) => {
+    try {
+      const creatives = await db.getUserCreatives(ctx.from.id, 5);
+      console.log(`[my_creatives] User ${ctx.from.id}, found ${creatives.length} creatives`);
+
+      if (creatives.length === 0) {
+        await ctx.editMessageText('📭 У тебе ще немає створених креативів.\n\nНадішли фото десерту, щоб створити перший креатив!', {
+          reply_markup: mainMenuKeyboard,
+        });
+        await ctx.answerCbQuery();
+        return;
+      }
+
+      await ctx.editMessageText(`📸 Твої останні креативи (${creatives.length}):`, {
+        reply_markup: mainMenuKeyboard,
+      });
+      await ctx.answerCbQuery();
+
+      // Відправляємо креативи
+      for (let i = 0; i < creatives.length; i++) {
+        const creative = creatives[i];
+        const isLast = i === creatives.length - 1;
+        
+        try {
+          if (creative.generated_image_url) {
+            const caption = creative.caption 
+              ? `${creative.caption}\n\n📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}`
+              : `📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}`;
+            
+            await ctx.replyWithPhoto(creative.generated_image_url, {
+              caption: caption.substring(0, 1024),
+              reply_markup: isLast ? creativeKeyboard : undefined,
+            });
+          } else {
+            await ctx.reply(`📄 Креатив #${creative.id}\n${creative.caption || 'Без опису'}\n📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}`, {
+              reply_markup: isLast ? creativeKeyboard : undefined,
+            });
+          }
+        } catch (error) {
+          console.error(`[my_creatives] Error sending creative ${creative.id}:`, error);
+          try {
+            await ctx.reply(`📄 Креатив #${creative.id}\n${creative.caption || 'Без опису'}\n📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}\n\n⚠️ Не вдалося завантажити зображення`, {
+              reply_markup: isLast ? creativeKeyboard : undefined,
+            });
+          } catch (e) {
+            console.error(`[my_creatives] Failed to send fallback message:`, e);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('[my_creatives] Error:', error);
+      await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
+    }
+  });
+
+  // Мова
+  bot.action('language', async (ctx) => {
+    try {
+      await ctx.answerCbQuery('Мова інтерфейсу: Українська (єдина)');
+    } catch (error) {
+      console.error('Error handling language:', error);
+      await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
+    }
+  });
+
+  // Допомога
+  bot.action('help', async (ctx) => {
+    try {
+      await ctx.editMessageText(getHelpMessage(), {
+        parse_mode: 'HTML',
+        reply_markup: mainMenuKeyboard,
+      });
+      await ctx.answerCbQuery();
+    } catch (error) {
+      console.error('Error handling help:', error);
+      await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
+    }
+  });
+
+  // Повернення до меню
+  bot.action('back_to_menu', async (ctx) => {
+    try {
+      const user = ctx.from;
+      const welcomeMessage = getWelcomeMessage(user.first_name);
+
+      try {
+        await ctx.editMessageText(welcomeMessage, {
+          parse_mode: 'Markdown',
+          reply_markup: mainMenuKeyboard,
+        });
+      } catch (editError) {
+        await ctx.reply(welcomeMessage, {
+          parse_mode: 'Markdown',
+          reply_markup: mainMenuKeyboard,
+        });
+      }
+      
+      await ctx.answerCbQuery();
+    } catch (error) {
+      console.error('Error handling back to menu:', error);
+      await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
+    }
+  });
+};
+

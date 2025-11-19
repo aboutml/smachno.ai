@@ -1,0 +1,70 @@
+import { config } from '../config.js';
+import { db } from '../db/database.js';
+import { getWelcomeMessage } from '../utils/messages.js';
+import { mainMenuKeyboard } from '../utils/keyboards.js';
+import { removeKeyboard, isAdmin } from '../utils/helpers.js';
+
+/**
+ * Реєстрація обробників команд
+ */
+export const registerCommands = (bot) => {
+  // Команда /start
+  bot.command('start', async (ctx) => {
+    const user = ctx.from;
+    
+    // Створюємо або оновлюємо користувача
+    await db.createOrUpdateUser(user.id, {
+      username: user.username,
+      first_name: user.first_name || user.first_name,
+    });
+
+    await removeKeyboard(ctx);
+
+    await ctx.reply(getWelcomeMessage(user.first_name), {
+      parse_mode: 'Markdown',
+      reply_markup: mainMenuKeyboard,
+    });
+  });
+
+  // Команда /stats - статистика (тільки для адмінів)
+  bot.command('stats', async (ctx) => {
+    if (!isAdmin(ctx.from.id, config.admin.userIds)) {
+      await ctx.reply('❌ У тебе немає доступу до цієї команди.');
+      return;
+    }
+
+    const stats = await db.getStats();
+    
+    if (!stats) {
+      await ctx.reply('❌ Помилка отримання статистики.');
+      return;
+    }
+
+    const statsMessage = `📊 **Статистика бота:**
+
+👥 Користувачів: ${stats.totalUsers}
+🎨 Креативів створено: ${stats.totalCreatives}
+💰 Загальний дохід: ${stats.totalRevenue} грн`;
+
+    await ctx.reply(statsMessage, { parse_mode: 'Markdown' });
+  });
+
+  // Команда /broadcast - розсилка (тільки для адмінів)
+  bot.command('broadcast', async (ctx) => {
+    if (!isAdmin(ctx.from.id, config.admin.userIds)) {
+      await ctx.reply('❌ У тебе немає доступу до цієї команди.');
+      return;
+    }
+
+    const message = ctx.message.text.replace('/broadcast', '').trim();
+    
+    if (!message) {
+      await ctx.reply('📢 Використання: /broadcast <повідомлення>\n\nНадішли повідомлення для розсилки всім користувачам.');
+      return;
+    }
+
+    // В реальному проєкті тут буде отримання всіх користувачів з БД
+    await ctx.reply('📢 Розсилка розпочата. (Для MVP - функція в розробці)');
+  });
+};
+
