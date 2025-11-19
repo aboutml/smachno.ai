@@ -5,7 +5,8 @@ import { paymentService } from '../services/payment.js';
 import { getSession, setSession, deleteSession, getOrCreateSessionWithLastPhoto } from '../utils/sessions.js';
 import { 
   mainMenuKeyboard, 
-  styleSelectionKeyboard, 
+  styleSelectionKeyboard,
+  locationSelectionKeyboard,
   stylesMenuKeyboard, 
   categoryKeyboard,
   settingsKeyboard,
@@ -39,12 +40,62 @@ export const registerCallbacks = (bot) => {
         await ctx.editMessageText('Напиши додаткові побажання до стилю — що підкреслити, змінити чи додати.');
         await ctx.answerCbQuery();
       } else {
-        await ctx.editMessageText('Чудово! Починаю генерувати 😋\n\nЦе займе близько 1 хвилини.');
+        // Показуємо вибір локації
+        await ctx.editMessageText('Обери локацію/фон для фото 👇', {
+          reply_markup: locationSelectionKeyboard,
+        });
         await ctx.answerCbQuery();
-        await processGeneration(ctx, session);
       }
     } catch (error) {
       console.error('Error handling style selection:', error);
+      await ctx.answerCbQuery('Помилка при обробці. Спробуй ще раз.');
+    }
+  });
+
+  // Обробка вибору локації
+  bot.action(/^location_(home|cafe|restaurant|shop|studio|outdoor|celebration|none)$/, async (ctx) => {
+    try {
+      const location = ctx.match[1];
+      const session = getSession(ctx.from.id);
+      
+      if (!session || !session.originalPhotoUrl) {
+        await ctx.answerCbQuery('Помилка: фото не знайдено. Надішли фото спочатку.');
+        return;
+      }
+
+      // Оновлюємо локацію в сесії
+      session.location = location;
+      setSession(ctx.from.id, session);
+
+      await ctx.editMessageText('Чудово! Починаю генерувати 😋\n\nЦе займе близько 1 хвилини.');
+      await ctx.answerCbQuery();
+      await processGeneration(ctx, session);
+    } catch (error) {
+      console.error('Error handling location selection:', error);
+      await ctx.answerCbQuery('Помилка при обробці. Спробуй ще раз.');
+    }
+  });
+
+  // Обробка повернення до вибору стилю
+  bot.action('back_to_styles', async (ctx) => {
+    try {
+      const session = getSession(ctx.from.id);
+      
+      if (!session || !session.originalPhotoUrl) {
+        await ctx.answerCbQuery('Помилка: фото не знайдено. Надішли фото спочатку.');
+        return;
+      }
+
+      // Очищаємо локацію, якщо була вибрана
+      delete session.location;
+      setSession(ctx.from.id, session);
+
+      await ctx.editMessageText('Обери стиль для покращеного фото 👇', {
+        reply_markup: styleSelectionKeyboard,
+      });
+      await ctx.answerCbQuery();
+    } catch (error) {
+      console.error('Error handling back to styles:', error);
       await ctx.answerCbQuery('Помилка при обробці. Спробуй ще раз.');
     }
   });
@@ -93,6 +144,12 @@ export const registerCallbacks = (bot) => {
         await ctx.answerCbQuery('Помилка: фото не знайдено. Надішли фото спочатку.');
         return;
       }
+      
+      // Очищаємо попередні вибори
+      session.style = null;
+      session.location = null;
+      session.customWishes = null;
+      setSession(ctx.from.id, session);
       
       await ctx.editMessageText('Обери стиль для покращеного фото 👇', {
         reply_markup: styleSelectionKeyboard,
@@ -149,8 +206,9 @@ export const registerCallbacks = (bot) => {
         return;
       }
       
-      // Скидаємо стиль та показуємо вибір знову
+      // Скидаємо стиль, локацію та показуємо вибір знову
       session.style = null;
+      session.location = null;
       session.customWishes = null;
       setSession(ctx.from.id, session);
       

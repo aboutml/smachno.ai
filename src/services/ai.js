@@ -25,16 +25,17 @@ export class AIService {
    * @param {string} customWishes - Додаткові побажання користувача (опціонально)
    * @param {number} n - Кількість варіантів (1-2)
    * @param {string} originalImageUrl - URL оригінального зображення (для image-to-image редагування через Gemini)
+   * @param {string} location - Локація/фон для зображення (home, cafe, restaurant, shop, studio, outdoor, celebration, none)
    * @returns {Promise<Array<string>>} Масив URL зображень
    */
-  async generateImage(prompt, style = null, customWishes = null, n = 2, originalImageUrl = null) {
+  async generateImage(prompt, style = null, customWishes = null, n = 2, originalImageUrl = null, location = null) {
     // Використовуємо тільки Gemini для генерації зображень
     if (!geminiClient) {
       throw new Error('Gemini client not initialized. Please set GEMINI_API_KEY environment variable.');
     }
     
     console.log('🎨 Using Gemini 2.5 Flash Image (Nano Banana) for image generation');
-    return await this.generateImageWithGemini(prompt, style, customWishes, n, originalImageUrl);
+    return await this.generateImageWithGemini(prompt, style, customWishes, n, originalImageUrl, location);
   }
 
   /**
@@ -44,9 +45,10 @@ export class AIService {
    * @param {string} customWishes - Додаткові побажання
    * @param {number} n - Кількість варіантів
    * @param {string} originalImageUrl - URL оригінального зображення
+   * @param {string} location - Локація/фон для зображення
    * @returns {Promise<Array<string>>} Масив URL зображень
    */
-  async generateImageWithGemini(prompt, style = null, customWishes = null, n = 2, originalImageUrl = null) {
+  async generateImageWithGemini(prompt, style = null, customWishes = null, n = 2, originalImageUrl = null, location = null) {
     try {
       if (!geminiClient) {
         throw new Error('Gemini client not initialized');
@@ -75,6 +77,22 @@ export class AIService {
 
       if (customWishes && customWishes.trim()) {
         enhancedPrompt += ` Additional requirements: ${customWishes}.`;
+      }
+
+      // Додаємо опис локації/фону
+      const locationPrompts = {
+        home: 'Set in a cozy home kitchen environment, natural home lighting, domestic atmosphere, warm and inviting background, home-style presentation.',
+        cafe: 'Set in a cozy cafe environment, cafe interior background, warm cafe lighting, coffee shop atmosphere, rustic cafe setting.',
+        restaurant: 'Set in an elegant restaurant environment, fine dining restaurant background, sophisticated restaurant lighting, upscale restaurant atmosphere.',
+        shop: 'Set in a bakery or pastry shop display window, shop window background, commercial display lighting, retail shop atmosphere, professional shop presentation.',
+        studio: 'Set in a professional photography studio, clean studio background, professional studio lighting, minimalist studio setting, high-end studio photography.',
+        outdoor: 'Set in an outdoor natural environment, natural outdoor lighting, outdoor background, fresh outdoor atmosphere, natural setting.',
+        celebration: 'Set in a festive celebration environment, party or celebration background, festive lighting, celebration atmosphere, special occasion setting.',
+        none: ''
+      };
+
+      if (location && locationPrompts[location]) {
+        enhancedPrompt += ' ' + locationPrompts[location];
       }
 
       enhancedPrompt += ' Absolutely photorealistic, hyper-realistic, looks like real professional photography, no illustration style, no cartoon, no digital art, no AI-generated look, real camera photo quality.';

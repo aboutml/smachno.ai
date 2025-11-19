@@ -69,13 +69,14 @@ export async function processGeneration(ctx, session) {
     // Аналізуємо фото
     const imageDescription = await aiService.analyzeImage(session.originalPhotoUrl);
     
-    // Генеруємо зображення з урахуванням стилю
+    // Генеруємо зображення з урахуванням стилю та локації
     const generatedImages = await aiService.generateImage(
       imageDescription,
       session.style,
       session.customWishes,
       2, // Завжди 2 варіанти
-      session.originalPhotoUrl
+      session.originalPhotoUrl,
+      session.location || null
     );
 
     // Генеруємо підпис

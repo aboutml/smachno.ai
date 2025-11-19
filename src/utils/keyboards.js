@@ -27,6 +27,23 @@ export const styleSelectionKeyboard = {
 };
 
 /**
+ * Клавіатура вибору локації/фону
+ */
+export const locationSelectionKeyboard = {
+  inline_keyboard: [
+    [{ text: '🏠 Домашня кухня', callback_data: 'location_home' }],
+    [{ text: '☕ Кав\'ярня', callback_data: 'location_cafe' }],
+    [{ text: '🍽️ Ресторан', callback_data: 'location_restaurant' }],
+    [{ text: '🏪 Вітрина магазину', callback_data: 'location_shop' }],
+    [{ text: '📸 Студія', callback_data: 'location_studio' }],
+    [{ text: '🌳 Природа/Вулиця', callback_data: 'location_outdoor' }],
+    [{ text: '🎂 Святковий стіл', callback_data: 'location_celebration' }],
+    [{ text: '➖ Без локації', callback_data: 'location_none' }],
+    [{ text: '🔙 Назад до стилів', callback_data: 'back_to_styles' }]
+  ],
+};
+
+/**
  * Клавіатура після генерації
  */
 export const postGenerationKeyboard = {
