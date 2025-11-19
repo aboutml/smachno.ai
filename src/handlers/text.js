@@ -2,7 +2,6 @@ import { getSession, setSession } from '../utils/sessions.js';
 import { mainMenuKeyboard } from '../utils/keyboards.js';
 import { removeKeyboard } from '../utils/helpers.js';
 import { processGeneration } from './generation.js';
-import { isGenerating } from '../utils/generationGuard.js';
 
 /**
  * Реєстрація обробників тексту
@@ -11,13 +10,6 @@ export const registerTextHandlers = (bot) => {
   bot.on('text', async (ctx) => {
     // Ігноруємо команди
     if (ctx.message.text.startsWith('/')) {
-      return;
-    }
-
-    // Перевіряємо, чи не триває генерація (окрім кастомного стилю, де очікуємо текст)
-    const session = getSession(ctx.from.id);
-    if (isGenerating(ctx.from.id) && !(session && session.style === 'custom' && !session.customWishes)) {
-      await ctx.reply('⏳ Зараз генерую твоє фото, зачекай трохи... Це займе до хвилини ⏳');
       return;
     }
 

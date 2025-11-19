@@ -15,22 +15,11 @@ import {
 } from '../utils/keyboards.js';
 import { getWelcomeMessage, getAboutMessage, getHelpMessage, getSettingsMessage } from '../utils/messages.js';
 import { processGeneration } from './generation.js';
-import { isGenerating } from '../utils/generationGuard.js';
 
 /**
  * Реєстрація всіх callback обробників
  */
 export const registerCallbacks = (bot) => {
-  // Middleware для перевірки генерації в процесі
-  bot.use(async (ctx, next) => {
-    // Перевіряємо тільки для callback queries
-    if (ctx.updateType === 'callback_query' && isGenerating(ctx.from.id)) {
-      await ctx.answerCbQuery('⏳ Зачекай, генерація в процесі...', { show_alert: false });
-      return;
-    }
-    return next();
-  });
-
   // Обробка вибору стилю
   bot.action(/^style_(bright|premium|cozy|wedding|custom)$/, async (ctx) => {
     try {

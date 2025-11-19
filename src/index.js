@@ -5,6 +5,8 @@ import { registerPhotoHandlers } from './handlers/photo.js';
 import { registerCallbacks } from './handlers/callbacks.js';
 import { registerTextHandlers } from './handlers/text.js';
 import { createWebhookServer, startWebhookServer } from './webhook/server.js';
+import { isGenerating } from './utils/generationGuard.js';
+import { getSession } from './utils/sessions.js';
 
 if (!config.telegram.token) {
   console.error('❌ TELEGRAM_BOT_TOKEN is required!');
@@ -19,6 +21,45 @@ bot.use(async (ctx, next) => {
   await next();
   const ms = Date.now() - start;
   console.log(`[${new Date().toISOString()}] ${ctx.updateType} - ${ms}ms`);
+});
+
+// Глобальний middleware для блокування команд під час генерації
+bot.use(async (ctx, next) => {
+  // Перевіряємо, чи триває генерація
+  if (isGenerating(ctx.from.id)) {
+    // Для callback queries - показуємо toast
+    if (ctx.updateType === 'callback_query') {
+      await ctx.answerCbQuery('⏳ Зачекай, генерація в процесі...', { show_alert: false });
+      return; // Блокуємо подальшу обробку
+    }
+    
+    // Для команд - показуємо повідомлення
+    if (ctx.updateType === 'message' && ctx.message?.text?.startsWith('/')) {
+      await ctx.reply('⏳ Зараз генерую твоє фото, зачекай трохи... Це займе до хвилини ⏳');
+      return; // Блокуємо подальшу обробку
+    }
+    
+    // Для фото - показуємо повідомлення
+    if (ctx.updateType === 'message' && ctx.message?.photo) {
+      await ctx.reply('⏳ Зараз генерую твоє фото, зачекай трохи... Це займе до хвилини ⏳');
+      return; // Блокуємо подальшу обробку
+    }
+    
+    // Для тексту (окрім кастомного стилю) - показуємо повідомлення
+    if (ctx.updateType === 'message' && ctx.message?.text) {
+      // Перевіряємо, чи це не побажання для кастомного стилю
+      const session = getSession(ctx.from.id);
+      const isCustomStyleInput = session && session.style === 'custom' && !session.customWishes;
+      
+      if (!isCustomStyleInput) {
+        await ctx.reply('⏳ Зараз генерую твоє фото, зачекай трохи... Це займе до хвилини ⏳');
+        return; // Блокуємо подальшу обробку
+      }
+    }
+  }
+  
+  // Якщо генерація не триває або це дозволений випадок - продовжуємо
+  return next();
 });
 
 // Реєстрація всіх обробників
