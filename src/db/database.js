@@ -286,7 +286,7 @@ export class Database {
           await this.incrementUserTotalPaid(userIdToUpdate, paymentAmount);
           
           // Додаємо доступні оплачені генерації
-          const paidGenerationsPerPayment = config.app.paidGenerationsPerPayment || 2;
+          const paidGenerationsPerPayment = config.app.paidGenerationsPerPayment || 1;
           await this.addPaidGenerations(userIdToUpdate, paidGenerationsPerPayment);
         }
       } else if (status === 'refunded') {
@@ -327,13 +327,25 @@ export class Database {
     
     // Обробка різних статусів платежу
     if (status === 'completed' && oldStatus !== 'completed') {
+      // Перевіряємо, чи платіж не був раніше рефанджений
+      // Якщо був рефанджений, не додаємо генерації (це може бути повторний webhook або помилка)
+      if (oldStatus === 'refunded') {
+        console.log(`[updatePaymentStatus] Payment ${paymentId} was previously refunded, now marked as completed. Skipping generation addition to prevent duplicate credits.`);
+        // Можна оновити total_paid для статистики, але не додаємо генерації
+        if (userIdToUpdate && paymentAmount > 0) {
+          console.log(`[updatePaymentStatus] Incrementing total_paid for user ${userIdToUpdate} by ${paymentAmount} (was refunded, now completed - stats only)`);
+          await this.incrementUserTotalPaid(userIdToUpdate, paymentAmount);
+        }
+        return data;
+      }
+      
       // Платіж став успішним - збільшуємо total_paid та додаємо доступні генерації
       if (userIdToUpdate && paymentAmount > 0) {
         console.log(`[updatePaymentStatus] Incrementing total_paid for user ${userIdToUpdate} by ${paymentAmount}`);
         await this.incrementUserTotalPaid(userIdToUpdate, paymentAmount);
         
         // Додаємо доступні оплачені генерації
-        const paidGenerationsPerPayment = config.app.paidGenerationsPerPayment || 2;
+        const paidGenerationsPerPayment = config.app.paidGenerationsPerPayment || 1;
         await this.addPaidGenerations(userIdToUpdate, paidGenerationsPerPayment);
       } else {
         console.warn(`[updatePaymentStatus] Cannot increment total_paid: userId=${userIdToUpdate}, amount=${paymentAmount}`);
