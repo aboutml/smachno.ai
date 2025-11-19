@@ -421,7 +421,12 @@ ${imageDescription ? `\nОпис зображення: ${imageDescription}` : ''
 
       videoPrompt += ' Absolutely photorealistic, hyper-realistic, looks like real professional video, smooth camera movement, cinematic quality, perfect for Instagram Reels, vertical format 9:16.';
 
-      // Завантажуємо зображення
+      // Обмежуємо duration до дозволених значень (4, 6, 8)
+      // Для Reels використовуємо 5 секунд, але Veo підтримує тільки 4, 6, 8
+      const validDuration = duration <= 4 ? 4 : duration <= 6 ? 6 : 8;
+
+      // Завантажуємо зображення для image-to-video
+      // Спочатку завантажуємо зображення з URL
       let imageData = null;
       try {
         const imageResponse = await fetch(imageUrl);
@@ -433,16 +438,55 @@ ${imageDescription ? `\nОпис зображення: ${imageDescription}` : ''
       }
 
       // Завантажуємо зображення як файл в Gemini Files API
+      // @google/genai очікує об'єкт з властивостями size, type, arrayBuffer, stream
+      const { Readable } = await import('stream');
+      
+      // Створюємо правильний Blob-подібний об'єкт використовуючи клас
+      // Це забезпечує правильну структуру з геттерами
+      class FileLike {
+        constructor(buffer, mimeType) {
+          this._buffer = buffer;
+          this._mimeType = mimeType;
+        }
+        
+        get size() {
+          return this._buffer.length;
+        }
+        
+        get type() {
+          return this._mimeType;
+        }
+        
+        async arrayBuffer() {
+          if (this._buffer.buffer) {
+            return this._buffer.buffer.slice(
+              this._buffer.byteOffset || 0,
+              (this._buffer.byteOffset || 0) + this._buffer.length
+            );
+          }
+          // Якщо немає buffer, створюємо новий ArrayBuffer
+          const ab = new ArrayBuffer(this._buffer.length);
+          const view = new Uint8Array(ab);
+          for (let i = 0; i < this._buffer.length; i++) {
+            view[i] = this._buffer[i];
+          }
+          return ab;
+        }
+        
+        stream() {
+          return Readable.from([this._buffer]);
+        }
+      }
+
+      const fileBlob = new FileLike(imageData, 'image/jpeg');
+
+      // Завантажуємо зображення як файл в Gemini Files API
       const uploadedFile = await geminiClient.files.upload({
-        fileData: imageData,
+        fileData: fileBlob,
         mimeType: 'image/jpeg',
       });
 
       console.log(`[Veo] Image uploaded, file URI: ${uploadedFile.uri}`);
-
-      // Обмежуємо duration до дозволених значень (4, 6, 8)
-      // Для Reels використовуємо 5 секунд, але Veo підтримує тільки 4, 6, 8
-      const validDuration = duration <= 4 ? 4 : duration <= 6 ? 6 : 8;
 
       // Генеруємо відео через Veo 3.1 Fast (швидша версія)
       // Згідно з документацією, передаємо файл напряму
