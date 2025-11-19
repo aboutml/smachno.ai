@@ -14,6 +14,7 @@ export const registerTextHandlers = (bot) => {
     }
 
     // Перевіряємо, чи це побажання для кастомного стилю
+    const session = getSession(ctx.from.id);
     if (session && session.style === 'custom' && !session.customWishes) {
       // Зберігаємо побажання та запускаємо генерацію
       session.customWishes = ctx.message.text;

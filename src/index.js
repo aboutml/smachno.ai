@@ -27,33 +27,35 @@ bot.use(async (ctx, next) => {
 bot.use(async (ctx, next) => {
   // Перевіряємо, чи триває генерація
   if (isGenerating(ctx.from.id)) {
+    console.log(`[generationGuard] Blocking ${ctx.updateType} for user ${ctx.from.id} - generation in progress`);
+    
     // Для callback queries - показуємо toast
     if (ctx.updateType === 'callback_query') {
       await ctx.answerCbQuery('⏳ Зачекай, генерація в процесі...', { show_alert: false });
-      return; // Блокуємо подальшу обробку
+      return; // Блокуємо подальшу обробку - НЕ викликаємо next()
     }
     
     // Для команд - показуємо повідомлення
     if (ctx.updateType === 'message' && ctx.message?.text?.startsWith('/')) {
       await ctx.reply('⏳ Зараз генерую твоє фото, зачекай трохи... Це займе до хвилини ⏳');
-      return; // Блокуємо подальшу обробку
+      return; // Блокуємо подальшу обробку - НЕ викликаємо next()
     }
     
     // Для фото - показуємо повідомлення
     if (ctx.updateType === 'message' && ctx.message?.photo) {
       await ctx.reply('⏳ Зараз генерую твоє фото, зачекай трохи... Це займе до хвилини ⏳');
-      return; // Блокуємо подальшу обробку
+      return; // Блокуємо подальшу обробку - НЕ викликаємо next()
     }
     
     // Для тексту (окрім кастомного стилю) - показуємо повідомлення
-    if (ctx.updateType === 'message' && ctx.message?.text) {
+    if (ctx.updateType === 'message' && ctx.message?.text && !ctx.message.text.startsWith('/')) {
       // Перевіряємо, чи це не побажання для кастомного стилю
       const session = getSession(ctx.from.id);
       const isCustomStyleInput = session && session.style === 'custom' && !session.customWishes;
       
       if (!isCustomStyleInput) {
         await ctx.reply('⏳ Зараз генерую твоє фото, зачекай трохи... Це займе до хвилини ⏳');
-        return; // Блокуємо подальшу обробку
+        return; // Блокуємо подальшу обробку - НЕ викликаємо next()
       }
     }
   }

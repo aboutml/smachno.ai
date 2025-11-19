@@ -61,6 +61,7 @@ export async function processGeneration(ctx, session) {
     const currentSession = getSession(ctx.from.id) || session;
     currentSession.isGenerating = true;
     setSession(ctx.from.id, currentSession);
+    console.log(`[generation] Set isGenerating=true for user ${ctx.from.id}`);
 
     // Показуємо повідомлення про генерацію
     await ctx.reply('Працюю над твоїм смачним фото… Це займе до хвилини ⏳');
@@ -176,6 +177,7 @@ export async function processGeneration(ctx, session) {
       finalSession.isGenerating = false;
     }
     deleteSession(ctx.from.id);
+    console.log(`[generation] Removed isGenerating flag for user ${ctx.from.id}`);
 
   } catch (error) {
     console.error('Error in processGeneration:', error);
@@ -186,6 +188,7 @@ export async function processGeneration(ctx, session) {
       errorSession.isGenerating = false;
       setSession(ctx.from.id, errorSession);
     }
+    console.log(`[generation] Removed isGenerating flag for user ${ctx.from.id} (error case)`);
     
     await ctx.reply('❌ Виникла помилка при генерації. Спробуй ще раз або звернись до підтримки.');
   }
