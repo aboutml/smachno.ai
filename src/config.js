@@ -13,7 +13,7 @@ export const config = {
     apiKey: (process.env.GEMINI_API_KEY || '').trim(),
   },
   ai: {
-    imageModel: process.env.IMAGE_MODEL || 'dall-e-3', // 'dall-e-3' або 'gemini-2.5-flash-image'
+    imageModel: process.env.IMAGE_MODEL || 'gemini-2.5-flash-image', // Використовуємо тільки Gemini
   },
   supabase: {
     url: process.env.SUPABASE_URL,
