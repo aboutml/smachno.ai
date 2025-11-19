@@ -321,6 +321,59 @@ bot.action('generate_own', async (ctx) => {
 // Обробка callback для кнопок головного меню
 bot.action('generate_photo', async (ctx) => {
   try {
+    // Перевіряємо доступні генерації одразу після натискання кнопки
+    const user = await db.getUserByTelegramId(ctx.from.id);
+    const freeGenerationsUsed = user?.free_generations_used || 0;
+    const canGenerateFree = freeGenerationsUsed < config.app.freeGenerations;
+    const availablePaidGenerations = await db.getAvailablePaidGenerations(ctx.from.id);
+
+    console.log(`[generate_photo] User ${ctx.from.id}, free generations used: ${freeGenerationsUsed}/${config.app.freeGenerations}, can generate free: ${canGenerateFree}, available paid: ${availablePaidGenerations}`);
+
+    // Якщо немає безкоштовних генерацій І немає доступних оплачених - потрібна оплата
+    if (!canGenerateFree && availablePaidGenerations === 0) {
+      try {
+        const payment = await paymentService.createPayment(ctx.from.id);
+        
+        // Зберігаємо інформацію про платіж
+        const userData = await db.createOrUpdateUser(ctx.from.id, {
+          username: ctx.from.username,
+          first_name: ctx.from.first_name,
+        });
+        await db.createPayment(userData.id, payment.amount * 100, config.payment.currency, payment.orderId);
+        
+        await ctx.editMessageText(
+          `💰 Для створення креативу потрібна оплата ${payment.amount} грн за 1 генерацію (2 варіанти зображень).\n\n` +
+          `Натисни кнопку нижче для оплати:`,
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [Markup.button.url('💳 Оплатити', payment.checkoutUrl)],
+                [Markup.button.callback('🏠 Головне меню', 'back_to_menu')]
+              ],
+            },
+          }
+        );
+        await ctx.answerCbQuery();
+        return;
+      } catch (paymentError) {
+        console.error('[generate_photo] Payment creation error:', paymentError);
+        await ctx.editMessageText(
+          `💰 Для створення креативу потрібна оплата ${config.payment.amount} грн за 1 генерацію (2 варіанти зображень).\n\n` +
+          `⚠️ Помилка створення платежу. Спробуй ще раз або звернись до підтримки.`,
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '🔙 Назад', callback_data: 'back_to_menu' }]
+              ],
+            },
+          }
+        );
+        await ctx.answerCbQuery();
+        return;
+      }
+    }
+
+    // Якщо є доступні генерації, просимо надіслати фото
     await ctx.editMessageText('Надішли фото десерту, який хочеш покращити 🍰✨', {
       reply_markup: {
         inline_keyboard: [
