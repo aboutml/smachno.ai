@@ -204,8 +204,27 @@ bot.action(/^style_(bright|premium|cozy|wedding|custom)$/, async (ctx) => {
 // Обробка callback для кнопок після генерації
 bot.action('regenerate_same', async (ctx) => {
   try {
-    const session = userSessions.get(ctx.from.id);
-    if (!session || !session.originalPhotoUrl) {
+    let session = userSessions.get(ctx.from.id);
+    let originalPhotoUrl = null;
+
+    // Якщо сесія є і містить фото - використовуємо його
+    if (session && session.originalPhotoUrl) {
+      originalPhotoUrl = session.originalPhotoUrl;
+    } else {
+      // Якщо сесії немає, завантажуємо фото з останнього креативу користувача
+      const creatives = await db.getUserCreatives(ctx.from.id, 1); // Останній креатив
+      if (creatives && creatives.length > 0 && creatives[0].original_photo_url) {
+        originalPhotoUrl = creatives[0].original_photo_url;
+        // Створюємо або оновлюємо сесію з фото
+        if (!session) {
+          session = {};
+        }
+        session.originalPhotoUrl = originalPhotoUrl;
+        userSessions.set(ctx.from.id, session);
+      }
+    }
+
+    if (!originalPhotoUrl) {
       await ctx.answerCbQuery('Помилка: фото не знайдено. Надішли фото спочатку.');
       return;
     }
@@ -232,8 +251,27 @@ bot.action('regenerate_same', async (ctx) => {
 
 bot.action('change_style', async (ctx) => {
   try {
-    const session = userSessions.get(ctx.from.id);
-    if (!session || !session.originalPhotoUrl) {
+    let session = userSessions.get(ctx.from.id);
+    let originalPhotoUrl = null;
+
+    // Якщо сесія є і містить фото - використовуємо його
+    if (session && session.originalPhotoUrl) {
+      originalPhotoUrl = session.originalPhotoUrl;
+    } else {
+      // Якщо сесії немає, завантажуємо фото з останнього креативу користувача
+      const creatives = await db.getUserCreatives(ctx.from.id, 1); // Останній креатив
+      if (creatives && creatives.length > 0 && creatives[0].original_photo_url) {
+        originalPhotoUrl = creatives[0].original_photo_url;
+        // Створюємо або оновлюємо сесію з фото
+        if (!session) {
+          session = {};
+        }
+        session.originalPhotoUrl = originalPhotoUrl;
+        userSessions.set(ctx.from.id, session);
+      }
+    }
+
+    if (!originalPhotoUrl) {
       await ctx.answerCbQuery('Помилка: фото не знайдено. Надішли фото спочатку.');
       return;
     }
