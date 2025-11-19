@@ -275,7 +275,7 @@ export class Database {
       
       console.log(`[updatePaymentStatus] Created new payment record for ${paymentId}`);
       
-      // Якщо платіж створюється зі статусом completed, оновлюємо total_paid
+      // Якщо платіж створюється зі статусом completed, оновлюємо total_paid та додаємо генерації
       // Рефанди не рахуються як оплата, тому не збільшуємо total_paid
       if (status === 'completed' && newPayment) {
         const userIdToUpdate = newPayment.user_id;
@@ -284,6 +284,10 @@ export class Database {
         if (userIdToUpdate && paymentAmount > 0) {
           console.log(`[updatePaymentStatus] Incrementing total_paid for user ${userIdToUpdate} by ${paymentAmount} (new payment)`);
           await this.incrementUserTotalPaid(userIdToUpdate, paymentAmount);
+          
+          // Додаємо доступні оплачені генерації
+          const paidGenerationsPerPayment = config.app.paidGenerationsPerPayment || 2;
+          await this.addPaidGenerations(userIdToUpdate, paidGenerationsPerPayment);
         }
       } else if (status === 'refunded') {
         console.log(`[updatePaymentStatus] Payment ${paymentId} created with refunded status - not incrementing total_paid`);
@@ -323,25 +327,33 @@ export class Database {
     
     // Обробка різних статусів платежу
     if (status === 'completed' && oldStatus !== 'completed') {
-      // Платіж став успішним - збільшуємо total_paid
+      // Платіж став успішним - збільшуємо total_paid та додаємо доступні генерації
       if (userIdToUpdate && paymentAmount > 0) {
         console.log(`[updatePaymentStatus] Incrementing total_paid for user ${userIdToUpdate} by ${paymentAmount}`);
         await this.incrementUserTotalPaid(userIdToUpdate, paymentAmount);
+        
+        // Додаємо доступні оплачені генерації
+        const paidGenerationsPerPayment = config.app.paidGenerationsPerPayment || 2;
+        await this.addPaidGenerations(userIdToUpdate, paidGenerationsPerPayment);
       } else {
         console.warn(`[updatePaymentStatus] Cannot increment total_paid: userId=${userIdToUpdate}, amount=${paymentAmount}`);
       }
     } else if (status === 'refunded' && oldStatus === 'completed') {
-      // Платіж був успішним, але тепер рефанд - зменшуємо total_paid
+      // Платіж був успішним, але тепер рефанд - зменшуємо total_paid та віднімаємо генерації
       if (userIdToUpdate && paymentAmount > 0) {
         console.log(`[updatePaymentStatus] Decrementing total_paid for user ${userIdToUpdate} by ${paymentAmount} (refund)`);
         await this.decrementUserTotalPaid(userIdToUpdate, paymentAmount);
+        
+        // Віднімаємо доступні оплачені генерації
+        const paidGenerationsPerPayment = config.app.paidGenerationsPerPayment || 2;
+        await this.removePaidGenerations(userIdToUpdate, paidGenerationsPerPayment);
       } else {
         console.warn(`[updatePaymentStatus] Cannot decrement total_paid: userId=${userIdToUpdate}, amount=${paymentAmount}`);
       }
     } else if (status === 'completed' && oldStatus === 'completed') {
-      console.log(`[updatePaymentStatus] Payment ${paymentId} was already completed, skipping total_paid update`);
+      console.log(`[updatePaymentStatus] Payment ${paymentId} was already completed, skipping updates`);
     } else if (status === 'refunded' && oldStatus === 'refunded') {
-      console.log(`[updatePaymentStatus] Payment ${paymentId} was already refunded, skipping total_paid update`);
+      console.log(`[updatePaymentStatus] Payment ${paymentId} was already refunded, skipping updates`);
     }
     
     return data;
@@ -426,52 +438,103 @@ export class Database {
   }
 
   /**
+   * Додає доступні оплачені генерації користувачу
+   * @param {number} userId - Внутрішній ID користувача
+   * @param {number} count - Кількість генерацій для додавання
+   */
+  async addPaidGenerations(userId, count) {
+    try {
+      // Отримуємо поточне значення
+      const { data: user, error: getUserError } = await supabase
+        .from('users')
+        .select('paid_generations_available')
+        .eq('id', userId)
+        .single();
+
+      if (getUserError) {
+        console.error('[addPaidGenerations] Error getting user:', getUserError);
+        return;
+      }
+
+      const currentAvailable = user?.paid_generations_available || 0;
+      const newAvailable = currentAvailable + (count || 0);
+
+      // Оновлюємо значення
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({
+          paid_generations_available: newAvailable,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', userId);
+
+      if (updateError) {
+        console.error('[addPaidGenerations] Error updating paid_generations_available:', updateError);
+      } else {
+        console.log(`[addPaidGenerations] User ${userId}: added ${count} paid generations, available ${currentAvailable} -> ${newAvailable}`);
+      }
+    } catch (error) {
+      console.error('[addPaidGenerations] Exception:', error);
+    }
+  }
+
+  /**
+   * Віднімає доступні оплачені генерації користувача (для рефандів)
+   * @param {number} userId - Внутрішній ID користувача
+   * @param {number} count - Кількість генерацій для віднімання
+   */
+  async removePaidGenerations(userId, count) {
+    try {
+      // Отримуємо поточне значення
+      const { data: user, error: getUserError } = await supabase
+        .from('users')
+        .select('paid_generations_available')
+        .eq('id', userId)
+        .single();
+
+      if (getUserError) {
+        console.error('[removePaidGenerations] Error getting user:', getUserError);
+        return;
+      }
+
+      const currentAvailable = user?.paid_generations_available || 0;
+      const newAvailable = Math.max(0, currentAvailable - (count || 0)); // Не дозволяємо від'ємні значення
+
+      // Оновлюємо значення
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({
+          paid_generations_available: newAvailable,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', userId);
+
+      if (updateError) {
+        console.error('[removePaidGenerations] Error updating paid_generations_available:', updateError);
+      } else {
+        console.log(`[removePaidGenerations] User ${userId}: removed ${count} paid generations, available ${currentAvailable} -> ${newAvailable}`);
+      }
+    } catch (error) {
+      console.error('[removePaidGenerations] Exception:', error);
+    }
+  }
+
+  /**
    * Отримує кількість доступних оплачених генерацій для користувача
    * @param {number} telegramId - Telegram ID користувача
    * @returns {number} - кількість доступних оплачених генерацій
    */
   async getAvailablePaidGenerations(telegramId) {
     try {
-      // Спочатку знаходимо користувача
       const user = await this.getUserByTelegramId(telegramId);
       if (!user) {
         return 0;
       }
 
-      // Рахуємо кількість успішних платежів
-      const { data: payments, error } = await supabase
-        .from('payments')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('status', 'completed');
-
-      if (error) {
-        console.error('[getAvailablePaidGenerations] Error checking payments:', error);
-        return 0;
-      }
-
-      const completedPaymentsCount = payments?.length || 0;
-      const paidGenerationsUsed = user.paid_generations_used || 0;
-      
-      // Використовуємо config для отримання кількості генерацій за оплату
-      const paidGenerationsPerPayment = config.app.paidGenerationsPerPayment || 2;
-      
-      const totalPaidGenerationsAvailable = completedPaymentsCount * paidGenerationsPerPayment;
-      
-      // Якщо використано більше, ніж доступно (можливо через помилку в минулому),
-      // обмежуємо використані до доступних, щоб не показувати від'ємне значення
-      const correctedPaidGenerationsUsed = Math.min(paidGenerationsUsed, totalPaidGenerationsAvailable);
-      const availablePaidGenerations = Math.max(0, totalPaidGenerationsAvailable - correctedPaidGenerationsUsed);
-      
-      // Якщо була корекція, логуємо це
-      if (paidGenerationsUsed > totalPaidGenerationsAvailable) {
-        console.warn(`[getAvailablePaidGenerations] User ${telegramId}: Data inconsistency detected! Used ${paidGenerationsUsed} but only ${totalPaidGenerationsAvailable} available. Correcting to ${correctedPaidGenerationsUsed}.`);
-      }
-      
-      console.log(`[getAvailablePaidGenerations] User ${telegramId}: completed payments: ${completedPaymentsCount}, used: ${paidGenerationsUsed} (corrected: ${correctedPaidGenerationsUsed}), available: ${availablePaidGenerations}`);
-      console.log(`[getAvailablePaidGenerations] Calculation: ${completedPaymentsCount} payments × ${paidGenerationsPerPayment} per payment = ${totalPaidGenerationsAvailable} total, minus ${correctedPaidGenerationsUsed} used = ${availablePaidGenerations} available`);
-      
-      return availablePaidGenerations;
+      // Просто повертаємо значення з поля paid_generations_available
+      const available = user.paid_generations_available || 0;
+      console.log(`[getAvailablePaidGenerations] User ${telegramId}: ${available} available paid generations`);
+      return Math.max(0, available); // Переконуємося, що значення не від'ємне
     } catch (error) {
       console.error('[getAvailablePaidGenerations] Exception:', error);
       return 0;
@@ -479,7 +542,7 @@ export class Database {
   }
 
   /**
-   * Збільшує лічильник використаних оплачених генерацій
+   * Зменшує лічильник доступних оплачених генерацій та збільшує використані
    * @param {number} telegramId - Telegram ID користувача
    */
   async incrementPaidGenerations(telegramId) {
@@ -490,10 +553,20 @@ export class Database {
         return;
       }
 
+      const currentAvailable = user.paid_generations_available || 0;
+      const currentUsed = user.paid_generations_used || 0;
+
+      // Перевіряємо, чи є доступні генерації
+      if (currentAvailable <= 0) {
+        console.warn(`[incrementPaidGenerations] User ${telegramId} has no available paid generations (${currentAvailable})`);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('users')
         .update({
-          paid_generations_used: (user.paid_generations_used || 0) + 1,
+          paid_generations_available: Math.max(0, currentAvailable - 1), // Зменшуємо доступні
+          paid_generations_used: currentUsed + 1, // Збільшуємо використані (для статистики)
           total_generations: (user.total_generations || 0) + 1,
           updated_at: new Date().toISOString(),
         })
@@ -504,7 +577,7 @@ export class Database {
       if (error) {
         console.error('[incrementPaidGenerations] Error updating user:', error);
       } else {
-        console.log(`[incrementPaidGenerations] Updated paid_generations_used for user ${telegramId}: ${user.paid_generations_used || 0} -> ${data.paid_generations_used}`);
+        console.log(`[incrementPaidGenerations] User ${telegramId}: available ${currentAvailable} -> ${data.paid_generations_available}, used ${currentUsed} -> ${data.paid_generations_used}`);
       }
     } catch (error) {
       console.error('[incrementPaidGenerations] Exception:', error);
