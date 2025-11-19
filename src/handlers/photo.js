@@ -2,6 +2,7 @@ import { storageService } from '../services/storage.js';
 import { setSession } from '../utils/sessions.js';
 import { styleSelectionKeyboard } from '../utils/keyboards.js';
 import { removeKeyboard } from '../utils/helpers.js';
+import { isGenerating } from '../utils/generationGuard.js';
 import { config } from '../config.js';
 
 /**
@@ -9,6 +10,12 @@ import { config } from '../config.js';
  */
 export const registerPhotoHandlers = (bot) => {
   bot.on('photo', async (ctx) => {
+    // Перевіряємо, чи не триває генерація
+    if (isGenerating(ctx.from.id)) {
+      await ctx.reply('⏳ Зараз генерую твоє фото, зачекай трохи... Це займе до хвилини ⏳');
+      return;
+    }
+
     try {
       const photo = ctx.message.photo[ctx.message.photo.length - 1]; // Найбільше фото
       const file = await ctx.telegram.getFile(photo.file_id);

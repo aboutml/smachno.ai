@@ -5,7 +5,7 @@ import { paymentService } from '../services/payment.js';
 import { storageService } from '../services/storage.js';
 import { Markup } from 'telegraf';
 import { postGenerationKeyboard, createPaymentKeyboard } from '../utils/keyboards.js';
-import { deleteSession } from '../utils/sessions.js';
+import { deleteSession, getSession, setSession } from '../utils/sessions.js';
 
 /**
  * Обробка генерації зображення
@@ -56,6 +56,11 @@ export async function processGeneration(ctx, session) {
         }
       }
     }
+
+    // Позначаємо, що генерація в процесі
+    const currentSession = getSession(ctx.from.id) || session;
+    currentSession.isGenerating = true;
+    setSession(ctx.from.id, currentSession);
 
     // Показуємо повідомлення про генерацію
     await ctx.reply('Працюю над твоїм смачним фото… Це займе до хвилини ⏳');
@@ -165,12 +170,23 @@ export async function processGeneration(ctx, session) {
       reply_markup: postGenerationKeyboard,
     });
 
-    // Очищаємо сесію після успішної генерації
+    // Видаляємо флаг генерації та очищаємо сесію після успішної генерації
+    const finalSession = getSession(ctx.from.id);
+    if (finalSession) {
+      finalSession.isGenerating = false;
+    }
     deleteSession(ctx.from.id);
 
   } catch (error) {
     console.error('Error in processGeneration:', error);
+    
+    // Видаляємо флаг генерації навіть при помилці
+    const errorSession = getSession(ctx.from.id);
+    if (errorSession) {
+      errorSession.isGenerating = false;
+      setSession(ctx.from.id, errorSession);
+    }
+    
     await ctx.reply('❌ Виникла помилка при генерації. Спробуй ще раз або звернись до підтримки.');
   }
 }
-
