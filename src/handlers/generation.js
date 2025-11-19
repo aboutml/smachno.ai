@@ -107,6 +107,13 @@ export async function processGeneration(ctx, session) {
       });
     }
 
+    // Показуємо опис з хештегами для поста
+    if (caption && caption.trim()) {
+      await ctx.reply(`📝 <b>Опис для Instagram-посту:</b>\n\n${caption}`, {
+        parse_mode: 'HTML',
+      });
+    }
+
     // Показуємо кнопки дій
     await ctx.reply('Що хочеш зробити далі?', {
       reply_markup: postGenerationKeyboard,
