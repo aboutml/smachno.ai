@@ -425,77 +425,53 @@ ${imageDescription ? `\nОпис зображення: ${imageDescription}` : ''
       // Для Reels використовуємо 5 секунд, але Veo підтримує тільки 4, 6, 8
       const validDuration = duration <= 4 ? 4 : duration <= 6 ? 6 : 8;
 
-      // Завантажуємо зображення для image-to-video
-      // Спочатку завантажуємо зображення з URL
-      let imageData = null;
+      // Генеруємо відео через Veo 3.1 Fast (швидша версія)
+      // Спочатку спробуємо використати URL напряму (якщо підтримується)
+      // Якщо не працює, завантажимо файл через Files API
+      let operation;
+      
       try {
+        // Спочатку спробуємо передати URL напряму
+        console.log(`[Veo] Attempting to use image URL directly: ${imageUrl}`);
+        operation = await geminiClient.models.generateVideos({
+          model: 'veo-3.1-fast-generate-preview',
+          prompt: videoPrompt,
+          image: imageUrl, // Передаємо URL напряму
+          duration: validDuration,
+        });
+        console.log(`[Veo] Using image URL directly for video generation`);
+      } catch (urlError) {
+        console.log(`[Veo] Direct URL failed (${urlError.message}), trying file upload...`);
+        
+        // Якщо не працює з URL, завантажуємо файл через Files API
+        // Завантажуємо зображення
         const imageResponse = await fetch(imageUrl);
         const imageBuffer = await imageResponse.arrayBuffer();
-        imageData = Buffer.from(imageBuffer);
-      } catch (error) {
-        console.error('Error loading image for Veo:', error);
-        throw new Error('Failed to load image for video generation');
+        const imageData = Buffer.from(imageBuffer);
+        
+        // Використовуємо вбудований Blob з Node.js
+        // Конвертуємо Buffer в Uint8Array для Blob
+        const uint8Array = new Uint8Array(imageData);
+        const blob = new Blob([uint8Array], { type: 'image/jpeg' });
+        
+        console.log(`[Veo] Created Blob with size: ${blob.size}, type: ${blob.type}`);
+        
+        // Завантажуємо файл
+        const uploadedFile = await geminiClient.files.upload({
+          fileData: blob,
+          mimeType: 'image/jpeg',
+        });
+        
+        console.log(`[Veo] Image uploaded, file URI: ${uploadedFile.uri}`);
+        
+        // Генеруємо відео з завантаженим файлом
+        operation = await geminiClient.models.generateVideos({
+          model: 'veo-3.1-fast-generate-preview',
+          prompt: videoPrompt,
+          image: uploadedFile,
+          duration: validDuration,
+        });
       }
-
-      // Завантажуємо зображення як файл в Gemini Files API
-      // @google/genai очікує об'єкт з властивостями size, type, arrayBuffer, stream
-      const { Readable } = await import('stream');
-      
-      // Створюємо правильний Blob-подібний об'єкт використовуючи клас
-      // Це забезпечує правильну структуру з геттерами
-      class FileLike {
-        constructor(buffer, mimeType) {
-          this._buffer = buffer;
-          this._mimeType = mimeType;
-        }
-        
-        get size() {
-          return this._buffer.length;
-        }
-        
-        get type() {
-          return this._mimeType;
-        }
-        
-        async arrayBuffer() {
-          if (this._buffer.buffer) {
-            return this._buffer.buffer.slice(
-              this._buffer.byteOffset || 0,
-              (this._buffer.byteOffset || 0) + this._buffer.length
-            );
-          }
-          // Якщо немає buffer, створюємо новий ArrayBuffer
-          const ab = new ArrayBuffer(this._buffer.length);
-          const view = new Uint8Array(ab);
-          for (let i = 0; i < this._buffer.length; i++) {
-            view[i] = this._buffer[i];
-          }
-          return ab;
-        }
-        
-        stream() {
-          return Readable.from([this._buffer]);
-        }
-      }
-
-      const fileBlob = new FileLike(imageData, 'image/jpeg');
-
-      // Завантажуємо зображення як файл в Gemini Files API
-      const uploadedFile = await geminiClient.files.upload({
-        fileData: fileBlob,
-        mimeType: 'image/jpeg',
-      });
-
-      console.log(`[Veo] Image uploaded, file URI: ${uploadedFile.uri}`);
-
-      // Генеруємо відео через Veo 3.1 Fast (швидша версія)
-      // Згідно з документацією, передаємо файл напряму
-      let operation = await geminiClient.models.generateVideos({
-        model: 'veo-3.1-fast-generate-preview',
-        prompt: videoPrompt,
-        image: uploadedFile, // Передаємо завантажений файл
-        duration: validDuration,
-      });
 
       console.log(`[Veo] Video generation started, operation: ${operation.name}`);
 
