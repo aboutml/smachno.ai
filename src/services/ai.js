@@ -447,7 +447,7 @@ ${imageDescription ? `\nОпис зображення: ${imageDescription}` : ''
       };
       
       // Генеруємо відео з об'єктом зображення
-      const operation = await geminiClient.models.generateVideos({
+      let operation = await geminiClient.models.generateVideos({
         model: 'veo-3.1-fast-generate-preview',
         prompt: videoPrompt,
         image: imageObject, // Передаємо об'єкт з imageBytes та mimeType
