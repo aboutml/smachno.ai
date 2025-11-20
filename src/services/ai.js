@@ -449,16 +449,15 @@ ${imageDescription ? `\nОпис зображення: ${imageDescription}` : ''
         const imageBuffer = await imageResponse.arrayBuffer();
         const imageData = Buffer.from(imageBuffer);
         
-        // Використовуємо вбудований Blob з Node.js
-        // Конвертуємо Buffer в Uint8Array для Blob
-        const uint8Array = new Uint8Array(imageData);
-        const blob = new Blob([uint8Array], { type: 'image/jpeg' });
+        // Згідно з документацією та прикладами, можна передати Buffer напряму
+        // Або створити Blob з Buffer
+        // Спробуємо спочатку передати Buffer напряму
+        console.log(`[Veo] Uploading image buffer (size: ${imageData.length} bytes)`);
         
-        console.log(`[Veo] Created Blob with size: ${blob.size}, type: ${blob.type}`);
-        
-        // Завантажуємо файл
+        // Завантажуємо файл через Files API
+        // Згідно з прикладами, можна передати Buffer напряму
         const uploadedFile = await geminiClient.files.upload({
-          fileData: blob,
+          fileData: imageData, // Передаємо Buffer напряму
           mimeType: 'image/jpeg',
         });
         
