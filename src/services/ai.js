@@ -426,81 +426,32 @@ ${imageDescription ? `\nОпис зображення: ${imageDescription}` : ''
       const validDuration = duration <= 4 ? 4 : duration <= 6 ? 6 : 8;
 
       // Генеруємо відео через Veo 3.1 Fast (швидша версія)
-      // Спочатку спробуємо використати URL напряму (якщо підтримується)
-      // Якщо не працює, завантажимо файл через Files API
-      let operation;
+      // Згідно з документацією, для image-to-video можна передати об'єкт з bytesBase64Encoded та mimeType
+      // Завантажуємо зображення та конвертуємо в base64
+      console.log(`[Veo] Loading image from URL: ${imageUrl}`);
+      const imageResponse = await fetch(imageUrl);
+      const imageBuffer = await imageResponse.arrayBuffer();
+      const imageData = Buffer.from(imageBuffer);
       
-      try {
-        // Спочатку спробуємо передати URL напряму
-        console.log(`[Veo] Attempting to use image URL directly: ${imageUrl}`);
-        operation = await geminiClient.models.generateVideos({
-          model: 'veo-3.1-fast-generate-preview',
-          prompt: videoPrompt,
-          image: imageUrl, // Передаємо URL напряму
-          duration: validDuration,
-        });
-        console.log(`[Veo] Using image URL directly for video generation`);
-      } catch (urlError) {
-        console.log(`[Veo] Direct URL failed (${urlError.message}), trying file upload...`);
-        
-        // Якщо не працює з URL, завантажуємо файл через Files API
-        // Завантажуємо зображення
-        const imageResponse = await fetch(imageUrl);
-        const imageBuffer = await imageResponse.arrayBuffer();
-        const imageData = Buffer.from(imageBuffer);
-        
-        // Створюємо об'єкт, який правильно працює з @google/genai
-        // Бібліотека очікує об'єкт з властивостями size, size_bytes, type, arrayBuffer(), stream(), slice()
-        const { Readable } = await import('stream');
-        
-        // Створюємо об'єкт з усіма необхідними властивостями та методами
-        const fileLike = {
-          size: imageData.length, // Для сумісності з Blob API
-          size_bytes: imageData.length, // Для @google/genai
-          type: 'image/jpeg',
-          async arrayBuffer() {
-            // Конвертуємо Buffer в ArrayBuffer
-            if (imageData.buffer && imageData.buffer instanceof ArrayBuffer) {
-              return imageData.buffer.slice(
-                imageData.byteOffset || 0,
-                (imageData.byteOffset || 0) + imageData.length
-              );
-            }
-            // Якщо немає buffer, створюємо новий ArrayBuffer
-            const ab = new ArrayBuffer(imageData.length);
-            const view = new Uint8Array(ab);
-            for (let i = 0; i < imageData.length; i++) {
-              view[i] = imageData[i];
-            }
-            return ab;
-          },
-          stream() {
-            return Readable.from([imageData]);
-          },
-          slice(start = 0, end = imageData.length) {
-            // Метод slice() для сумісності з Blob API
-            return imageData.slice(start, end);
-          },
-        };
-        
-        console.log(`[Veo] Created file-like object with size: ${fileLike.size}, size_bytes: ${fileLike.size_bytes}, type: ${fileLike.type}`);
-        
-        // Завантажуємо файл через Files API
-        const uploadedFile = await geminiClient.files.upload({
-          fileData: fileLike,
-          mimeType: 'image/jpeg',
-        });
-        
-        console.log(`[Veo] Image uploaded, file URI: ${uploadedFile.uri}`);
-        
-        // Генеруємо відео з завантаженим файлом
-        operation = await geminiClient.models.generateVideos({
-          model: 'veo-3.1-fast-generate-preview',
-          prompt: videoPrompt,
-          image: uploadedFile,
-          duration: validDuration,
-        });
-      }
+      // Конвертуємо в base64
+      const base64Image = imageData.toString('base64');
+      
+      // Створюємо об'єкт у форматі, який очікує Veo API
+      // Згідно з помилкою: "Input instance with `image` should contain both `bytesBase64Encoded` and `mimeType`"
+      const imageObject = {
+        bytesBase64Encoded: base64Image,
+        mimeType: 'image/jpeg',
+      };
+      
+      console.log(`[Veo] Created image object with base64 data (size: ${base64Image.length} chars)`);
+      
+      // Генеруємо відео з об'єктом зображення
+      const operation = await geminiClient.models.generateVideos({
+        model: 'veo-3.1-fast-generate-preview',
+        prompt: videoPrompt,
+        image: imageObject, // Передаємо об'єкт з bytesBase64Encoded та mimeType
+        duration: validDuration,
+      });
 
       console.log(`[Veo] Video generation started, operation: ${operation.name}`);
 
