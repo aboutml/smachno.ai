@@ -426,71 +426,32 @@ ${imageDescription ? `\nОпис зображення: ${imageDescription}` : ''
       const validDuration = duration <= 4 ? 4 : duration <= 6 ? 6 : 8;
 
       // Генеруємо відео через Veo 3.1 Fast (швидша версія)
-      // Згідно з документацією, для image-to-video потрібно завантажити файл через Files API
-      // або передати об'єкт у правильному форматі
+      // Згідно з документацією, для image-to-video потрібно передати об'єкт з imageBytes та mimeType
+      // Завантажуємо зображення
       console.log(`[Veo] Loading image from URL: ${imageUrl}`);
       const imageResponse = await fetch(imageUrl);
       const imageBuffer = await imageResponse.arrayBuffer();
       const imageData = Buffer.from(imageBuffer);
       
-      // Конвертуємо в base64
-      const base64Image = imageData.toString('base64');
+      // Конвертуємо Buffer в Uint8Array для imageBytes
+      const imageBytes = new Uint8Array(imageData);
+      
+      console.log(`[Veo] Created imageBytes with size: ${imageBytes.length} bytes`);
       
       // Створюємо об'єкт у форматі, який очікує Veo API
-      // Згідно з помилкою: "Input instance with `image` should contain both `bytesBase64Encoded` and `mimeType` in underlying struct value"
-      // Спробуємо спочатку формат з bytesBase64Encoded та mimeType на верхньому рівні
-      console.log(`[Veo] Created image object with base64 data (size: ${base64Image.length} chars)`);
+      // Згідно з документацією: { imageBytes: Uint8Array, mimeType: string }
+      const imageObject = {
+        imageBytes: imageBytes,
+        mimeType: 'image/jpeg',
+      };
       
       // Генеруємо відео з об'єктом зображення
-      let operation;
-      try {
-        // Метод 1: bytesBase64Encoded та mimeType на верхньому рівні
-        const imageObject1 = {
-          bytesBase64Encoded: base64Image,
-          mimeType: 'image/jpeg',
-        };
-        operation = await geminiClient.models.generateVideos({
-          model: 'veo-3.1-fast-generate-preview',
-          prompt: videoPrompt,
-          image: imageObject1,
-          duration: validDuration,
-        });
-        console.log(`[Veo] Method 1 (bytesBase64Encoded) succeeded`);
-      } catch (error1) {
-        console.log(`[Veo] Method 1 failed: ${error1.message}, trying method 2...`);
-        try {
-          // Метод 2: inlineData (як у Gemini API для зображень)
-          const imageObject2 = {
-            inlineData: {
-              data: base64Image,
-              mimeType: 'image/jpeg',
-            },
-          };
-          operation = await geminiClient.models.generateVideos({
-            model: 'veo-3.1-fast-generate-preview',
-            prompt: videoPrompt,
-            image: imageObject2,
-            duration: validDuration,
-          });
-          console.log(`[Veo] Method 2 (inlineData) succeeded`);
-        } catch (error2) {
-          console.log(`[Veo] Method 2 failed: ${error2.message}, trying method 3...`);
-          // Метод 3: спробуємо передати об'єкт з вкладеною структурою
-          const imageObject3 = {
-            image: {
-              bytesBase64Encoded: base64Image,
-              mimeType: 'image/jpeg',
-            },
-          };
-          operation = await geminiClient.models.generateVideos({
-            model: 'veo-3.1-fast-generate-preview',
-            prompt: videoPrompt,
-            image: imageObject3.image,
-            duration: validDuration,
-          });
-          console.log(`[Veo] Method 3 succeeded`);
-        }
-      }
+      const operation = await geminiClient.models.generateVideos({
+        model: 'veo-3.1-fast-generate-preview',
+        prompt: videoPrompt,
+        image: imageObject, // Передаємо об'єкт з imageBytes та mimeType
+        duration: validDuration,
+      });
 
       console.log(`[Veo] Video generation started, operation: ${operation.name}`);
 
