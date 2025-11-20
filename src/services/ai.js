@@ -433,13 +433,14 @@ ${imageDescription ? `\nОпис зображення: ${imageDescription}` : ''
       const imageBuffer = await imageResponse.arrayBuffer();
       const imageData = Buffer.from(imageBuffer);
       
-      // Конвертуємо Buffer в Uint8Array для imageBytes
-      const imageBytes = new Uint8Array(imageData);
+      // Конвертуємо Buffer в base64 рядок для imageBytes
+      // Помилка каже "fromImageBytes must be a string", тому потрібен base64 рядок
+      const imageBytes = imageData.toString('base64');
       
-      console.log(`[Veo] Created imageBytes with size: ${imageBytes.length} bytes`);
+      console.log(`[Veo] Created imageBytes (base64 string) with size: ${imageBytes.length} chars`);
       
       // Створюємо об'єкт у форматі, який очікує Veo API
-      // Згідно з документацією: { imageBytes: Uint8Array, mimeType: string }
+      // Згідно з документацією та помилкою: { imageBytes: string (base64), mimeType: string }
       const imageObject = {
         imageBytes: imageBytes,
         mimeType: 'image/jpeg',
