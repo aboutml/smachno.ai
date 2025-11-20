@@ -31,7 +31,7 @@ export const registerTextHandlers = (bot) => {
     await ctx.reply('📸 Для генерації потрібно надіслати фото десерту.\n\nНатисни кнопку нижче або надішли фото напряму.', {
       reply_markup: {
         inline_keyboard: [
-          [{ text: '📸 Згенерувати фото десерту', callback_data: 'generate_photo' }],
+          [{ text: '📸 Згенерувати креатив десерту', callback_data: 'generate_photo' }],
           [{ text: '💡 Стилі / Пресети', callback_data: 'styles_menu' }],
           [{ text: 'ℹ️ Про бота', callback_data: 'about' }, { text: '⚙️ Налаштування', callback_data: 'settings' }]
         ],

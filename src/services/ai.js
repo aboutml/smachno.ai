@@ -449,17 +449,67 @@ ${imageDescription ? `\nОпис зображення: ${imageDescription}` : ''
         const imageBuffer = await imageResponse.arrayBuffer();
         const imageData = Buffer.from(imageBuffer);
         
-        // Згідно з документацією та прикладами, можна передати Buffer напряму
-        // Або створити Blob з Buffer
-        // Спробуємо спочатку передати Buffer напряму
-        console.log(`[Veo] Uploading image buffer (size: ${imageData.length} bytes)`);
+        // Створюємо об'єкт, який правильно працює з @google/genai
+        // Бібліотека очікує об'єкт з властивостями size, type, arrayBuffer(), stream()
+        // Buffer не має size як звичайну властивість, тому створюємо об'єкт вручну
+        const { Readable } = await import('stream');
+        
+        // Створюємо об'єкт з явними властивостями
+        // Важливо: size має бути звичайною властивістю (не геттером)
+        const fileLike = {
+          size: imageData.length, // Звичайна властивість
+          type: 'image/jpeg', // Звичайна властивість
+          async arrayBuffer() {
+            // Конвертуємо Buffer в ArrayBuffer
+            if (imageData.buffer && imageData.buffer instanceof ArrayBuffer) {
+              return imageData.buffer.slice(
+                imageData.byteOffset || 0,
+                (imageData.byteOffset || 0) + imageData.length
+              );
+            }
+            // Якщо немає buffer, створюємо новий ArrayBuffer
+            const ab = new ArrayBuffer(imageData.length);
+            const view = new Uint8Array(ab);
+            for (let i = 0; i < imageData.length; i++) {
+              view[i] = imageData[i];
+            }
+            return ab;
+          },
+          stream() {
+            return Readable.from([imageData]);
+          },
+        };
+        
+        // Перевіряємо, що size доступний
+        console.log(`[Veo] Created file-like object with size: ${fileLike.size}, type: ${fileLike.type}`);
+        console.log(`[Veo] Size property type: ${typeof fileLike.size}, value: ${fileLike.size}`);
         
         // Завантажуємо файл через Files API
-        // Згідно з прикладами, можна передати Buffer напряму
-        const uploadedFile = await geminiClient.files.upload({
-          fileData: imageData, // Передаємо Buffer напряму
-          mimeType: 'image/jpeg',
-        });
+        // Спробуємо різні формати параметрів
+        let uploadedFile;
+        try {
+          // Варіант 1: з fileData та mimeType
+          uploadedFile = await geminiClient.files.upload({
+            fileData: fileLike,
+            mimeType: 'image/jpeg',
+          });
+        } catch (uploadError1) {
+          console.log(`[Veo] Upload method 1 failed: ${uploadError1.message}, trying method 2...`);
+          try {
+            // Варіант 2: з file та config
+            uploadedFile = await geminiClient.files.upload({
+              file: fileLike,
+              config: { mimeType: 'image/jpeg' },
+            });
+          } catch (uploadError2) {
+            console.log(`[Veo] Upload method 2 failed: ${uploadError2.message}, trying method 3...`);
+            // Варіант 3: з Buffer напряму
+            uploadedFile = await geminiClient.files.upload({
+              file: imageData,
+              config: { mimeType: 'image/jpeg' },
+            });
+          }
+        }
         
         console.log(`[Veo] Image uploaded, file URI: ${uploadedFile.uri}`);
         
