@@ -117,6 +117,7 @@ export const categoryKeyboard = {
 export const settingsKeyboard = {
   inline_keyboard: [
     [{ text: '📸 Мої креативи', callback_data: 'my_creatives' }],
+    [{ text: '📝 Зворотний зв\'язок', callback_data: 'feedback' }],
     [{ text: '🧩 Мова інтерфейсу: Українська', callback_data: 'language' }],
     [{ text: '🏠 Головне меню', callback_data: 'back_to_menu' }]
   ],

@@ -405,6 +405,27 @@ export const registerCallbacks = (bot) => {
   });
 
   // Налаштування
+  bot.action('feedback', async (ctx) => {
+    try {
+      await ctx.editMessageText('📝 Надішли своє повідомлення, пропозицію або повідом про помилку.\n\nТвоя думка дуже важлива для нас! 💙', {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '🔙 Назад', callback_data: 'settings' }]
+          ],
+        },
+      });
+      await ctx.answerCbQuery();
+      
+      // Встановлюємо флаг, що очікуємо зворотний зв'язок
+      const session = getSession(ctx.from.id) || {};
+      session.waitingForFeedback = true;
+      setSession(ctx.from.id, session);
+    } catch (error) {
+      console.error('[feedback] Error:', error);
+      await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
+    }
+  });
+
   bot.action('settings', async (ctx) => {
     try {
       await ctx.editMessageText(getSettingsMessage(), {

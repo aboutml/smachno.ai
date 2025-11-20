@@ -626,6 +626,69 @@ export class Database {
       totalRevenue,
     };
   }
+
+  /**
+   * Зберігає зворотний зв'язок від користувача
+   * @param {number} userId - Внутрішній ID користувача
+   * @param {string} message - Повідомлення від користувача
+   * @param {string} type - Тип зворотного зв'язку ('bug', 'suggestion', 'general')
+   * @returns {Promise<Object|null>} Збережений запис або null при помилці
+   */
+  async saveFeedback(userId, message, type = 'general') {
+    try {
+      const { data, error } = await supabase
+        .from('feedback')
+        .insert({
+          user_id: userId,
+          message: message,
+          type: type,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error saving feedback:', error);
+        return null;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error in saveFeedback:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Отримує всі зворотні зв'язки (для адмінів)
+   * @param {number} limit - Максимальна кількість записів
+   * @returns {Promise<Array>} Масив зворотних зв'язків
+   */
+  async getAllFeedback(limit = 50) {
+    try {
+      const { data, error } = await supabase
+        .from('feedback')
+        .select(`
+          *,
+          users:user_id (
+            telegram_id,
+            username,
+            first_name
+          )
+        `)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (error) {
+        console.error('Error getting feedback:', error);
+        return [];
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Error in getAllFeedback:', error);
+      return [];
+    }
+  }
 }
 
 export const db = new Database();

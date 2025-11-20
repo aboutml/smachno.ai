@@ -50,6 +50,42 @@ export const registerCommands = (bot) => {
   });
 
   // Команда /broadcast - розсилка (тільки для адмінів)
+  bot.command('feedback_list', async (ctx) => {
+    try {
+      // Перевіряємо, чи користувач є адміном
+      if (!config.admin.userIds.includes(ctx.from.id)) {
+        await ctx.reply('❌ У тебе немає доступу до цієї команди.');
+        return;
+      }
+
+      const feedbackList = await db.getAllFeedback(20);
+
+      if (feedbackList.length === 0) {
+        await ctx.reply('📭 Поки що немає зворотних зв\'язків.');
+        return;
+      }
+
+      let message = `📝 Останні зворотні зв'язки (${feedbackList.length}):\n\n`;
+
+      for (const feedback of feedbackList) {
+        const user = feedback.users || {};
+        const username = user.username ? `@${user.username}` : (user.first_name || `ID: ${user.telegram_id}`);
+        const date = new Date(feedback.created_at).toLocaleString('uk-UA');
+        const type = feedback.type === 'bug' ? '🐛' : feedback.type === 'suggestion' ? '💡' : '📝';
+        
+        message += `${type} <b>${username}</b> (${date}):\n`;
+        message += `${feedback.message.substring(0, 200)}${feedback.message.length > 200 ? '...' : ''}\n\n`;
+      }
+
+      await ctx.reply(message, {
+        parse_mode: 'HTML',
+      });
+    } catch (error) {
+      console.error('[feedback_list] Error:', error);
+      await ctx.reply('❌ Помилка при отриманні списку зворотних зв\'язків.');
+    }
+  });
+
   bot.command('broadcast', async (ctx) => {
     if (!isAdmin(ctx.from.id, config.admin.userIds)) {
       await ctx.reply('❌ У тебе немає доступу до цієї команди.');

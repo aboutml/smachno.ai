@@ -1,7 +1,8 @@
-import { getSession, setSession } from '../utils/sessions.js';
-import { mainMenuKeyboard } from '../utils/keyboards.js';
+import { getSession, setSession, deleteSession } from '../utils/sessions.js';
+import { mainMenuKeyboard, settingsKeyboard } from '../utils/keyboards.js';
 import { removeKeyboard } from '../utils/helpers.js';
 import { processGeneration } from './generation.js';
+import { db } from '../db/database.js';
 
 /**
  * Реєстрація обробників тексту
@@ -13,8 +14,42 @@ export const registerTextHandlers = (bot) => {
       return;
     }
 
-    // Перевіряємо, чи це побажання для кастомного стилю
     const session = getSession(ctx.from.id);
+
+    // Перевіряємо, чи це зворотний зв'язок
+    if (session && session.waitingForFeedback) {
+      const feedbackMessage = ctx.message.text;
+      
+      // Отримуємо або створюємо користувача
+      const userData = await db.createOrUpdateUser(ctx.from.id, {
+        username: ctx.from.username,
+        first_name: ctx.from.first_name,
+      });
+
+      // Зберігаємо зворотний зв'язок
+      const savedFeedback = await db.saveFeedback(userData.id, feedbackMessage, 'general');
+      
+      if (savedFeedback) {
+        await ctx.reply('✅ Дякую за твій зворотний зв\'язок! Ми обов\'язково його розглянемо. 💙', {
+          reply_markup: settingsKeyboard,
+        });
+      } else {
+        await ctx.reply('❌ Виникла помилка при збереженні повідомлення. Спробуй ще раз.', {
+          reply_markup: settingsKeyboard,
+        });
+      }
+
+      // Видаляємо флаг очікування зворотного зв'язку
+      delete session.waitingForFeedback;
+      if (Object.keys(session).length === 0) {
+        deleteSession(ctx.from.id);
+      } else {
+        setSession(ctx.from.id, session);
+      }
+      return;
+    }
+
+    // Перевіряємо, чи це побажання для кастомного стилю
     if (session && session.style === 'custom' && !session.customWishes) {
       // Зберігаємо побажання та запускаємо генерацію
       session.customWishes = ctx.message.text;
