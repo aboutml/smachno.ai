@@ -488,12 +488,43 @@ ${imageDescription ? `\nОпис зображення: ${imageDescription}` : ''
       console.log(`[Veo] Video generated successfully, URI: ${generatedVideo.video.uri}`);
 
       // Завантажуємо відео
+      // Згідно з документацією, files.download() може повертати дані в різних форматах
       const videoData = await geminiClient.files.download({
         file: generatedVideo.video,
       });
 
-      // Конвертуємо в Buffer (якщо це не Buffer вже)
-      const videoBuffer = Buffer.isBuffer(videoData) ? videoData : Buffer.from(videoData);
+      console.log(`[Veo] Video data type: ${typeof videoData}, is Buffer: ${Buffer.isBuffer(videoData)}`);
+
+      // Конвертуємо в Buffer
+      let videoBuffer;
+      if (Buffer.isBuffer(videoData)) {
+        videoBuffer = videoData;
+      } else if (videoData instanceof ArrayBuffer) {
+        videoBuffer = Buffer.from(videoData);
+      } else if (videoData instanceof Uint8Array) {
+        videoBuffer = Buffer.from(videoData);
+      } else if (typeof videoData === 'string') {
+        // Якщо це base64 рядок
+        videoBuffer = Buffer.from(videoData, 'base64');
+      } else if (videoData && videoData.buffer) {
+        // Якщо це об'єкт з buffer властивістю
+        videoBuffer = Buffer.from(videoData.buffer);
+      } else if (videoData && videoData.data) {
+        // Якщо дані в data властивості
+        videoBuffer = Buffer.from(videoData.data);
+      } else {
+        // Якщо дані не отримані, спробуємо завантажити з URI напряму
+        console.log(`[Veo] Video data is undefined or unexpected format, trying to download from URI directly`);
+        const videoResponse = await fetch(generatedVideo.video.uri, {
+          headers: {
+            'x-goog-api-key': config.gemini.apiKey,
+          },
+        });
+        const videoArrayBuffer = await videoResponse.arrayBuffer();
+        videoBuffer = Buffer.from(videoArrayBuffer);
+      }
+
+      console.log(`[Veo] Video buffer created, size: ${videoBuffer.length} bytes`);
 
       return videoBuffer;
 
