@@ -312,7 +312,7 @@ export const createWebhookServer = (bot) => {
         orderDate: orderDate,
         amount: amount,
         currency: req.query.currency || config.payment.currency,
-        productName: [req.query.productName || process.env.WAYFORPAY_PRODUCT_NAME || 'Generation of creative for Instagram'],
+        productName: [req.query.productName || process.env.WAYFORPAY_PRODUCT_NAME || 'Generation of creative for Instagram/TikTok'],
         productCount: [1],
         productPrice: [amount],
         returnUrl: req.query.returnUrl || `${process.env.APP_URL || 'https://your-app.com'}/payment/callback`,

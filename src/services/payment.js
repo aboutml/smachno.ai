@@ -23,7 +23,7 @@ export class PaymentService {
       amount: paymentAmountInHryvnias, // В гривнях для Create Invoice API
       currency: config.payment.currency,
       // Використовуємо латиницю для тестування (кирилиця може викликати проблеми з підписом)
-      productName: [process.env.WAYFORPAY_PRODUCT_NAME || 'Generation of creative for Instagram'],
+      productName: [process.env.WAYFORPAY_PRODUCT_NAME || 'Generation of creative for Instagram/TikTok'],
       productCount: [1], // Кількість товарів (завжди 1)
       productPrice: [paymentAmountInHryvnias], // Ціна в гривнях для Create Invoice API
       returnUrl: `${process.env.APP_URL || 'https://your-app.com'}/payment/callback`,

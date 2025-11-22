@@ -55,7 +55,7 @@ export class AIService {
       }
 
       // Формуємо промпт для редагування зображення з акцентом на максимальну реалістичність
-      let enhancedPrompt = `Transform this food photography into a highly realistic, professional Instagram-quality image: ${prompt}. 
+      let enhancedPrompt = `Transform this food photography into a highly realistic, professional Instagram/TikTok-quality image: ${prompt}. 
         Make it look absolutely photorealistic - like a real professional food photographer took this photo. 
         Enhance lighting to be natural and flattering, improve composition and styling, add realistic depth of field. 
         Keep the main subject authentic but make it look premium and appetizing. 
@@ -141,7 +141,7 @@ export class AIService {
             config: {
               responseModalities: ['IMAGE'], // Явно вказуємо, що хочемо зображення
               imageConfig: {
-                aspectRatio: '1:1', // Instagram квадрат
+                aspectRatio: '1:1', // Instagram/TikTok квадрат
               },
             },
           });
@@ -244,11 +244,11 @@ export class AIService {
       }
 
       const systemInstruction = `Ти експерт з маркетингу для пекарень та кав'ярень. 
-Створюй короткі, привабливі підписи до постів в Instagram українською мовою.
+Створюй короткі, привабливі підписи до постів в Instagram/TikTok українською мовою.
 Використовуй емодзі, хештеги та створюй атмосферу затишку та апетиту.
 Підпис має бути 1-2 речення, максимум 200 символів.`;
 
-      const userPrompt = `Створи підпис до Instagram-посту для такого виробу: ${prompt}
+      const userPrompt = `Створи підпис до Instagram/TikTok-посту для такого виробу: ${prompt}
 ${imageDescription ? `\nОпис зображення: ${imageDescription}` : ''}
 
 Підпис має бути українською мовою, з емодзі та релевантними хештегами.`;
@@ -323,7 +323,7 @@ ${imageDescription ? `\nОпис зображення: ${imageDescription}` : ''
         throw error;
       }
 
-      const prompt = 'Опиши це зображення детально українською мовою. Що на фото? Які кольори, текстури, стиль? Це для генерації Instagram-посту для пекарні.';
+      const prompt = 'Опиши це зображення детально українською мовою. Що на фото? Які кольори, текстури, стиль? Це для генерації Instagram/TikTok-посту для пекарні.';
 
       const response = await geminiClient.models.generateContent({
         model: 'gemini-2.0-flash-exp', // Використовуємо текстову модель Gemini з підтримкою зображень
@@ -361,11 +361,11 @@ ${imageDescription ? `\nОпис зображення: ${imageDescription}` : ''
         text = response.text;
       }
 
-      return text.trim() || 'Фото виробу для Instagram-посту';
+      return text.trim() || 'Фото виробу для Instagram/TikTok-посту';
     } catch (error) {
       console.error('Error analyzing image with Gemini:', error);
       // Fallback опис
-      return 'Фото виробу для Instagram-посту';
+      return 'Фото виробу для Instagram/TikTok-посту';
     }
   }
 
@@ -388,38 +388,39 @@ ${imageDescription ? `\nОпис зображення: ${imageDescription}` : ''
       console.log('🎬 Using Veo 3.1 for video generation');
 
       // Формуємо промпт для відео
-      let videoPrompt = prompt;
+      // ВАЖЛИВО: Не можна змінювати сам десерт, тільки яскравість, насиченість, кольори та фон
+      let videoPrompt = `Keep the dessert exactly as it is - do not modify, change, or alter the dessert itself. Only adjust lighting, brightness, color saturation, and background. ${prompt}`;
       
-      // Додаємо стильові характеристики
+      // Додаємо стильові характеристики (тільки для яскравості, насиченості та кольорів)
       const stylePrompts = {
-        bright: 'vibrant, juicy colors, fresh and appetizing look, bright natural daylight, colorful realistic background, energetic and lively atmosphere.',
-        premium: 'luxury realistic pastry shop aesthetic, elegant photorealistic presentation, sophisticated natural styling, premium quality look, refined natural composition, high-end bakery atmosphere.',
-        cozy: 'cozy realistic cafe atmosphere, warm and inviting natural lighting, rustic or vintage realistic style, comfortable and homely feeling, warm natural color palette.',
-        wedding: 'wedding cake realistic aesthetic, elegant and romantic photorealistic style, soft natural pastel colors, delicate realistic decorations, sophisticated and refined natural appearance.',
-        custom: ''
+        bright: 'Enhance brightness and color saturation, vibrant and fresh color palette, bright natural daylight, colorful realistic background, energetic atmosphere. Keep the dessert unchanged.',
+        premium: 'Sophisticated lighting adjustments, refined color grading, premium quality look, elegant natural composition, high-end atmosphere. Keep the dessert unchanged.',
+        cozy: 'Warm lighting adjustments, warm color palette, cozy atmosphere, inviting natural lighting, comfortable feeling. Keep the dessert unchanged.',
+        wedding: 'Soft lighting adjustments, pastel color grading, elegant and romantic style, delicate atmosphere, refined appearance. Keep the dessert unchanged.',
+        custom: 'Keep the dessert unchanged.'
       };
 
       if (style && stylePrompts[style]) {
         videoPrompt += ' ' + stylePrompts[style];
       }
 
-      // Додаємо опис локації/фону
+      // Додаємо опис локації/фону (тільки фон, не десерт)
       const locationPrompts = {
-        home: 'Set in a cozy home kitchen environment, natural home lighting, domestic atmosphere, warm and inviting background, home-style presentation.',
-        cafe: 'Set in a cozy cafe environment, cafe interior background, warm cafe lighting, coffee shop atmosphere, rustic cafe setting.',
-        restaurant: 'Set in an elegant restaurant environment, fine dining restaurant background, sophisticated restaurant lighting, upscale restaurant atmosphere.',
-        shop: 'Set in a bakery or pastry shop display window, shop window background, commercial display lighting, retail shop atmosphere, professional shop presentation.',
-        studio: 'Set in a professional photography studio, clean studio background, professional studio lighting, minimalist studio setting, high-end studio photography.',
-        outdoor: 'Set in an outdoor natural environment, natural outdoor lighting, outdoor background, fresh outdoor atmosphere, natural setting.',
-        celebration: 'Set in a festive celebration environment, party or celebration background, festive lighting, celebration atmosphere, special occasion setting.',
-        none: ''
+        home: 'Change background to cozy home kitchen environment, natural home lighting, domestic atmosphere, warm and inviting background. Keep the dessert exactly as it is.',
+        cafe: 'Change background to cozy cafe environment, cafe interior background, warm cafe lighting, coffee shop atmosphere. Keep the dessert exactly as it is.',
+        restaurant: 'Change background to elegant restaurant environment, fine dining restaurant background, sophisticated restaurant lighting. Keep the dessert exactly as it is.',
+        shop: 'Change background to bakery or pastry shop display window, shop window background, commercial display lighting. Keep the dessert exactly as it is.',
+        studio: 'Change background to professional photography studio, clean studio background, professional studio lighting, minimalist studio setting. Keep the dessert exactly as it is.',
+        outdoor: 'Change background to outdoor natural environment, natural outdoor lighting, outdoor background, fresh outdoor atmosphere. Keep the dessert exactly as it is.',
+        celebration: 'Change background to festive celebration environment, party or celebration background, festive lighting. Keep the dessert exactly as it is.',
+        none: 'Keep the dessert exactly as it is.'
       };
 
       if (location && locationPrompts[location]) {
         videoPrompt += ' ' + locationPrompts[location];
       }
 
-      videoPrompt += ' Absolutely photorealistic, hyper-realistic, looks like real professional video, smooth camera movement, cinematic quality, perfect for Instagram Reels, vertical format 9:16.';
+      videoPrompt += ' Absolutely photorealistic, hyper-realistic, looks like real professional video, smooth camera movement, cinematic quality, perfect for Instagram Reels/TikTok, vertical format 9:16. Do not modify the dessert - only adjust lighting, colors, saturation, and background.';
 
       // Обмежуємо duration до дозволених значень (4, 6, 8)
       // Для Reels використовуємо 5 секунд, але Veo підтримує тільки 4, 6, 8

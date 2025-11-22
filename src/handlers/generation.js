@@ -131,7 +131,7 @@ export async function processGeneration(ctx, session) {
       // Відправляємо результат
       await ctx.reply('Готово! Ось твоє відео для Reels 🎬✨');
       await ctx.replyWithVideo(savedVideoUrl, {
-        caption: 'Твоє відео готове для Instagram Reels!',
+        caption: 'Твоє відео готове для Instagram Reels/TikTok!',
       });
     } else {
       // Генеруємо зображення з урахуванням стилю та локації
@@ -174,7 +174,7 @@ export async function processGeneration(ctx, session) {
 
     // Показуємо опис з хештегами для поста
     if (caption && caption.trim()) {
-      await ctx.reply(`📝 <b>Опис для Instagram-посту:</b>\n\n${caption}`, {
+      await ctx.reply(`📝 <b>Опис для Instagram/TikTok-посту:</b>\n\n${caption}`, {
         parse_mode: 'HTML',
       });
     }
