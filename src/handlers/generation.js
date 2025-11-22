@@ -109,7 +109,7 @@ export async function processGeneration(ctx, session) {
         imageDescription,
         session.style,
         session.location || null,
-        6 // 6 секунд для Reels (найближче до 5)
+        8 // 8 секунд для Reels/TikTok (1080p роздільність)
       );
 
       // Зберігаємо відео

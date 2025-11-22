@@ -49,7 +49,7 @@ export const locationSelectionKeyboard = {
 export const contentTypeSelectionKeyboard = {
   inline_keyboard: [
     [{ text: '📸 Фото (2 варіанти)', callback_data: 'content_photo' }],
-    [{ text: '🎬 Відео для Reels (5 сек)', callback_data: 'content_video' }],
+    [{ text: '🎬 Відео для Reels/TikTok (8 сек, 1080p)', callback_data: 'content_video' }],
     [{ text: '🔙 Назад до локації', callback_data: 'back_to_location' }]
   ],
 };

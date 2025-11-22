@@ -420,11 +420,12 @@ ${imageDescription ? `\nОпис зображення: ${imageDescription}` : ''
         videoPrompt += ' ' + locationPrompts[location];
       }
 
-      videoPrompt += ' Absolutely photorealistic, hyper-realistic, looks like real professional video, smooth camera movement, cinematic quality, perfect for Instagram Reels/TikTok, vertical format 9:16. Do not modify the dessert - only adjust lighting, colors, saturation, and background.';
+      videoPrompt += ' Absolutely photorealistic, hyper-realistic, looks like real professional video, smooth camera movement, cinematic quality, perfect for Instagram Reels/TikTok, vertical format 9:16 aspect ratio (1080x1920 pixels or higher resolution). Do not modify the dessert - only adjust lighting, colors, saturation, and background.';
 
       // Обмежуємо duration до дозволених значень (4, 6, 8)
-      // Для Reels використовуємо 5 секунд, але Veo підтримує тільки 4, 6, 8
-      const validDuration = duration <= 4 ? 4 : duration <= 6 ? 6 : 8;
+      // Для Reels використовуємо 8 секунд для отримання 1080p роздільності
+      // Veo 3.1 підтримує 1080p тільки для 8 секунд, для 4-6 секунд - тільки 720p
+      const validDuration = 8; // Використовуємо 8 секунд для максимальної якості (1080p)
 
       // Генеруємо відео через Veo 3.1 Fast (швидша версія)
       // Згідно з документацією, для image-to-video потрібно передати об'єкт з imageBytes та mimeType
@@ -448,12 +449,18 @@ ${imageDescription ? `\nОпис зображення: ${imageDescription}` : ''
       };
       
       // Генеруємо відео з об'єктом зображення
+      // Використовуємо 8 секунд для отримання 1080p роздільності (максимальна якість)
+      // Veo 3.1 підтримує 1080p тільки для 8 секунд
+      // Для вертикального формату 9:16 (Reels/TikTok) розміри: 1080x1920 пікселів
       let operation = await geminiClient.models.generateVideos({
         model: 'veo-3.1-fast-generate-preview',
         prompt: videoPrompt,
         image: imageObject, // Передаємо об'єкт з imageBytes та mimeType
-        duration: validDuration,
+        duration: validDuration, // 8 секунд для 1080p
+        aspectRatio: '9:16', // Вертикальний формат для Reels/TikTok (1080x1920)
       });
+      
+      console.log(`[Veo] Video generation with duration: ${validDuration}s, aspect ratio: 9:16 (1080x1920 pixels)`);
 
       console.log(`[Veo] Video generation started, operation: ${operation.name}`);
 
