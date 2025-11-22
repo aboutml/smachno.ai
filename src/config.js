@@ -29,6 +29,8 @@ export const config = {
   },
   admin: {
     userIds: (process.env.ADMIN_USER_IDS || '').split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id)),
+    feedbackUsername: process.env.ADMIN_FEEDBACK_USERNAME || null, // Username для отримання зворотного зв'язку (опціонально)
+    feedbackUserId: process.env.ADMIN_FEEDBACK_USER_ID ? parseInt(process.env.ADMIN_FEEDBACK_USER_ID) : null, // Telegram ID для отримання зворотного зв'язку (опціонально)
   },
   app: {
     nodeEnv: process.env.NODE_ENV || 'development',

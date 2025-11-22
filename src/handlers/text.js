@@ -3,6 +3,7 @@ import { mainMenuKeyboard, settingsKeyboard } from '../utils/keyboards.js';
 import { removeKeyboard } from '../utils/helpers.js';
 import { processGeneration } from './generation.js';
 import { db } from '../db/database.js';
+import { config } from '../config.js';
 
 /**
  * Реєстрація обробників тексту
@@ -33,6 +34,49 @@ export const registerTextHandlers = (bot) => {
         await ctx.reply('✅ Дякую за твій зворотний зв\'язок! Ми обов\'язково його розглянемо. 💙', {
           reply_markup: settingsKeyboard,
         });
+
+        // Надсилаємо повідомлення адміну
+        try {
+          const userInfo = `@${ctx.from.username || 'без username'}`;
+          const feedbackNotification = `📝 <b>Новий зворотний зв'язок</b>\n\n` +
+            `👤 Користувач: ${userInfo} (ID: ${ctx.from.id})\n` +
+            `📅 Дата: ${new Date().toLocaleString('uk-UA')}\n\n` +
+            `💬 Повідомлення:\n${feedbackMessage}`;
+
+          // Спробуємо надіслати за userId (якщо вказано)
+          if (config.admin.feedbackUserId) {
+            try {
+              await ctx.telegram.sendMessage(config.admin.feedbackUserId, feedbackNotification, {
+                parse_mode: 'HTML',
+              });
+              console.log(`[feedback] Notification sent to admin user ID: ${config.admin.feedbackUserId}`);
+            } catch (userIdError) {
+              console.error(`[feedback] Failed to send to user ID ${config.admin.feedbackUserId}:`, userIdError.message);
+              // Якщо не вдалося надіслати за userId, спробуємо username
+              if (config.admin.feedbackUsername) {
+                await ctx.telegram.sendMessage(`@${config.admin.feedbackUsername}`, feedbackNotification, {
+                  parse_mode: 'HTML',
+                });
+                console.log(`[feedback] Notification sent to admin username: @${config.admin.feedbackUsername}`);
+              }
+            }
+          } else if (config.admin.feedbackUsername) {
+            // Якщо вказано тільки username
+            await ctx.telegram.sendMessage(`@${config.admin.feedbackUsername}`, feedbackNotification, {
+              parse_mode: 'HTML',
+            });
+            console.log(`[feedback] Notification sent to admin username: @${config.admin.feedbackUsername}`);
+          } else if (config.admin.userIds.length > 0) {
+            // Якщо не вказано спеціальний username/userId, надсилаємо першому адміну
+            await ctx.telegram.sendMessage(config.admin.userIds[0], feedbackNotification, {
+              parse_mode: 'HTML',
+            });
+            console.log(`[feedback] Notification sent to first admin user ID: ${config.admin.userIds[0]}`);
+          }
+        } catch (notificationError) {
+          console.error('[feedback] Error sending notification to admin:', notificationError);
+          // Не показуємо помилку користувачу, бо повідомлення вже збережено
+        }
       } else {
         await ctx.reply('❌ Виникла помилка при збереженні повідомлення. Спробуй ще раз.', {
           reply_markup: settingsKeyboard,
