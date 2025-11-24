@@ -8,6 +8,7 @@ import {
   styleSelectionKeyboard,
   locationSelectionKeyboard,
   contentTypeSelectionKeyboard,
+  animationSelectionKeyboard,
   stylesMenuKeyboard, 
   categoryKeyboard,
   settingsKeyboard,
@@ -80,7 +81,7 @@ export const registerCallbacks = (bot) => {
   });
 
   // Обробка вибору типу контенту
-  bot.action(/^content_(photo|video)$/, async (ctx) => {
+  bot.action(/^content_(photo|video|kling)$/, async (ctx) => {
     try {
       const contentType = ctx.match[1];
       const session = getSession(ctx.from.id);
@@ -91,19 +92,83 @@ export const registerCallbacks = (bot) => {
       }
 
       // Оновлюємо тип контенту в сесії
-      session.contentType = contentType;
+      // Для KlingAI зберігаємо як 'kling', але в processGeneration обробляємо як 'video'
+      session.contentType = contentType === 'kling' ? 'kling' : contentType;
       setSession(ctx.from.id, session);
 
-      if (contentType === 'video') {
-        await ctx.editMessageText('Чудово! Починаю генерувати відео для Reels 🎬\n\nЦе займе 2-5 хвилин ⏳');
-      } else {
+      // Якщо це фото - одразу генеруємо
+      if (contentType === 'photo') {
         await ctx.editMessageText('Чудово! Починаю генерувати 😋\n\nЦе займе близько 1 хвилини.');
+        await ctx.answerCbQuery();
+        await processGeneration(ctx, session);
+      } else {
+        // Для відео - показуємо вибір анімації
+        await ctx.editMessageText('Обери тип анімації для відео 🎬\n\nЯка анімація тобі подобається?', {
+          reply_markup: animationSelectionKeyboard,
+        });
+        await ctx.answerCbQuery();
       }
+    } catch (error) {
+      console.error('Error handling content type selection:', error);
+      await ctx.answerCbQuery('Помилка при обробці. Спробуй ще раз.');
+    }
+  });
+
+  // Обробка вибору анімації
+  bot.action(/^animation_(rotate|zoom_in|zoom_out|pan|tilt|none)$/, async (ctx) => {
+    try {
+      const animationType = ctx.match[1];
+      const session = getSession(ctx.from.id);
       
+      if (!session || !session.originalPhotoUrl) {
+        await ctx.answerCbQuery('Помилка: фото не знайдено. Надішли фото спочатку.');
+        return;
+      }
+
+      // Зберігаємо вибір анімації в сесії
+      session.animation = animationType;
+      setSession(ctx.from.id, session);
+
+      const animationNames = {
+        rotate: 'обертання 360°',
+        zoom_in: 'наближення',
+        zoom_out: 'віддалення',
+        pan: 'рух вліво-вправо',
+        tilt: 'рух вгору-вниз',
+        none: 'без анімації'
+      };
+
+      const contentType = session.contentType === 'kling' ? 'KlingAI 1.6' : 'Veo 3.1';
+      await ctx.editMessageText(`Чудово! Обрано анімацію: ${animationNames[animationType]} 🎬\n\nПочинаю генерувати відео через ${contentType}...\n\nЦе займе 2-5 хвилин ⏳`);
       await ctx.answerCbQuery();
       await processGeneration(ctx, session);
     } catch (error) {
-      console.error('Error handling content type selection:', error);
+      console.error('Error handling animation selection:', error);
+      await ctx.answerCbQuery('Помилка при обробці. Спробуй ще раз.');
+    }
+  });
+
+  // Обробка повернення до вибору типу контенту
+  bot.action('back_to_content_type', async (ctx) => {
+    try {
+      const session = getSession(ctx.from.id);
+      
+      if (!session || !session.originalPhotoUrl) {
+        await ctx.answerCbQuery('Помилка: фото не знайдено. Надішли фото спочатку.');
+        return;
+      }
+
+      // Видаляємо вибір анімації та типу контенту
+      delete session.animation;
+      delete session.contentType;
+      setSession(ctx.from.id, session);
+
+      await ctx.editMessageText('Обери тип контенту 👇', {
+        reply_markup: contentTypeSelectionKeyboard,
+      });
+      await ctx.answerCbQuery();
+    } catch (error) {
+      console.error('Error handling back to content type:', error);
       await ctx.answerCbQuery('Помилка при обробці. Спробуй ще раз.');
     }
   });

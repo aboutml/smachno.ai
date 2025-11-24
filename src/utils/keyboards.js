@@ -49,8 +49,24 @@ export const locationSelectionKeyboard = {
 export const contentTypeSelectionKeyboard = {
   inline_keyboard: [
     [{ text: '📸 Фото (2 варіанти)', callback_data: 'content_photo' }],
-    [{ text: '🎬 Відео для Reels/TikTok (8 сек, 1080p)', callback_data: 'content_video' }],
+    [{ text: '🎬 Відео для Reels/TikTok (5 сек, з аудіо)', callback_data: 'content_video' }],
+    [{ text: '🎥 Відео через KlingAI 1.6', callback_data: 'content_kling' }],
     [{ text: '🔙 Назад до локації', callback_data: 'back_to_location' }]
+  ],
+};
+
+/**
+ * Клавіатура вибору анімації для відео
+ */
+export const animationSelectionKeyboard = {
+  inline_keyboard: [
+    [{ text: '🔄 Обертання 360°', callback_data: 'animation_rotate' }],
+    [{ text: '🔍 Zoom In (наближення)', callback_data: 'animation_zoom_in' }],
+    [{ text: '🔎 Zoom Out (віддалення)', callback_data: 'animation_zoom_out' }],
+    [{ text: '↔️ Pan (рух вліво-вправо)', callback_data: 'animation_pan' }],
+    [{ text: '↕️ Tilt (рух вгору-вниз)', callback_data: 'animation_tilt' }],
+    [{ text: '✨ Без анімації', callback_data: 'animation_none' }],
+    [{ text: '🔙 Назад', callback_data: 'back_to_content_type' }]
   ],
 };
 

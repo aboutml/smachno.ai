@@ -65,11 +65,16 @@ export async function processGeneration(ctx, session) {
 
     // Перевіряємо тип контенту
     const contentType = session.contentType || 'photo';
-    const isVideo = contentType === 'video';
+    const isVideo = contentType === 'video' || contentType === 'kling';
+    const isKlingAI = contentType === 'kling';
 
     // Показуємо повідомлення про генерацію
     if (isVideo) {
-      await ctx.reply('Працюю над твоїм відео для Reels… Це займе 2-5 хвилин ⏳');
+      if (isKlingAI) {
+        await ctx.reply('Працюю над твоїм відео через KlingAI 1.6… Це займе 2-5 хвилин ⏳');
+      } else {
+        await ctx.reply('Працюю над твоїм відео для Reels… Це займе 2-5 хвилин ⏳');
+      }
     } else {
       await ctx.reply('Працюю над твоїм смачним фото… Це займе до хвилини ⏳');
     }
@@ -87,34 +92,67 @@ export async function processGeneration(ctx, session) {
 
     if (isVideo) {
       // Генеруємо відео
-      // Спочатку генеруємо фото для використання як основу для відео
-      const generatedImages = await aiService.generateImage(
-        imageDescription,
-        session.style,
-        session.customWishes,
-        1, // Тільки 1 фото для відео
-        session.originalPhotoUrl,
-        session.location || null
-      );
+      let videoBuffer;
+      let savedImageUrl = null;
 
-      // Зберігаємо фото
-      const savedImageUrl = await storageService.saveGeneratedImage(
-        generatedImages[0],
-        `${ctx.from.id}_${Date.now()}.png`
-      );
+      if (isKlingAI) {
+        // Для KlingAI використовуємо оригінальне фото безпосередньо
+        console.log('[generation] Using KlingAI for video generation');
+        videoBuffer = await aiService.generateVideoWithKlingAI(
+          session.originalPhotoUrl,
+          imageDescription,
+          session.style,
+          session.location || null,
+          session.animation || null // Додаємо анімацію
+        );
+      } else {
+        // Для Veo спочатку генеруємо фото для використання як основу для відео
+        console.log('[generation] Using Veo for video generation');
+        const generatedImages = await aiService.generateImage(
+          imageDescription,
+          session.style,
+          session.customWishes,
+          1, // Тільки 1 фото для відео
+          session.originalPhotoUrl,
+          session.location || null
+        );
 
-      // Генеруємо відео на основі згенерованого фото
-      const videoBuffer = await aiService.generateVideo(
-        savedImageUrl,
-        imageDescription,
-        session.style,
-        session.location || null,
-        8 // 8 секунд для Reels/TikTok (1080p роздільність)
-      );
+        // Зберігаємо фото
+        savedImageUrl = await storageService.saveGeneratedImage(
+          generatedImages[0],
+          `${ctx.from.id}_${Date.now()}.png`
+        );
+
+        // Генеруємо відео на основі згенерованого фото
+        videoBuffer = await aiService.generateVideo(
+          savedImageUrl,
+          imageDescription,
+          session.style,
+          session.location || null,
+          5, // 5 секунд для Reels/TikTok (буде округлено до 6 для Veo)
+          session.animation || null // Додаємо анімацію
+        );
+      }
+
+      // Генеруємо аудіо озвучку на основі підпису
+      console.log('[generation] Generating audio narration...');
+      let finalVideoBuffer = videoBuffer;
+      try {
+        const audioText = caption || imageDescription || 'Смачний десерт для Instagram Reels';
+        const audioBuffer = await aiService.generateAudio(audioText, 'alloy');
+        
+        // Об'єднуємо відео з аудіо
+        console.log('[generation] Combining video with audio...');
+        finalVideoBuffer = await aiService.combineVideoWithAudio(videoBuffer, audioBuffer);
+        console.log('[generation] Video and audio combined successfully');
+      } catch (audioError) {
+        console.error('[generation] Error adding audio, using video without audio:', audioError);
+        // Продовжуємо без аудіо, якщо є помилка
+      }
 
       // Зберігаємо відео
       const savedVideoUrl = await storageService.saveGeneratedVideo(
-        videoBuffer,
+        finalVideoBuffer,
         `${ctx.from.id}_${Date.now()}.mp4`
       );
 
@@ -122,14 +160,15 @@ export async function processGeneration(ctx, session) {
       await db.saveCreative(userData.id, {
         originalPhotoUrl: session.originalPhotoUrl,
         prompt: imageDescription,
-        generatedImageUrl: savedImageUrl, // Зберігаємо також фото
+        generatedImageUrl: savedImageUrl, // Може бути null для KlingAI
         generatedVideoUrl: savedVideoUrl,
         contentType: 'video',
         caption,
       });
 
       // Відправляємо результат
-      await ctx.reply('Готово! Ось твоє відео для Reels 🎬✨');
+      const videoSource = isKlingAI ? 'KlingAI 1.6' : 'Veo 3.1';
+      await ctx.reply(`Готово! Ось твоє відео для Reels 🎬✨ (згенеровано через ${videoSource}, з аудіо озвучкою)`);
       await ctx.replyWithVideo(savedVideoUrl, {
         caption: 'Твоє відео готове для Instagram Reels/TikTok!',
       });

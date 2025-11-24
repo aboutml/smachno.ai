@@ -1,6 +1,27 @@
 import { GoogleGenAI } from '@google/genai';
+import { OpenAI } from 'openai';
 import fetch from 'node-fetch';
 import { config } from '../config.js';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import { writeFileSync, unlinkSync, readFileSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
+
+const execAsync = promisify(exec);
+
+// Ініціалізуємо OpenAI для TTS
+let openaiClient = null;
+if (config.openai.apiKey) {
+  try {
+    openaiClient = new OpenAI({
+      apiKey: config.openai.apiKey,
+    });
+    console.log('✅ OpenAI client initialized successfully for TTS');
+  } catch (error) {
+    console.warn('⚠️  Warning: Failed to initialize OpenAI client for TTS:', error.message);
+  }
+}
 
 // Ініціалізуємо Gemini тільки якщо є API ключ
 let geminiClient = null;
@@ -379,7 +400,7 @@ ${imageDescription ? `\nОпис зображення: ${imageDescription}` : ''
    * @param {number} duration - Тривалість відео в секундах (4, 6, або 8)
    * @returns {Promise<Buffer>} Buffer з відео даними
    */
-  async generateVideo(imageUrl, prompt, style = null, location = null, duration = 6) {
+  async generateVideo(imageUrl, prompt, style = null, location = null, duration = 6, animation = null) {
     try {
       if (!geminiClient) {
         throw new Error('Gemini client not initialized');
@@ -420,12 +441,26 @@ ${imageDescription ? `\nОпис зображення: ${imageDescription}` : ''
         videoPrompt += ' ' + locationPrompts[location];
       }
 
+      // Додаємо інструкції про анімацію
+      const animationPrompts = {
+        rotate: 'Smooth 360-degree rotation around the dessert, continuous circular camera movement, showcase all angles of the dessert, professional turntable effect.',
+        zoom_in: 'Smooth zoom in towards the dessert, gradually getting closer, focus on details, cinematic zoom effect, professional camera movement.',
+        zoom_out: 'Smooth zoom out from the dessert, gradually revealing more of the background, cinematic pull-back effect, professional camera movement.',
+        pan: 'Smooth horizontal panning movement left to right or right to left, showcase the dessert from side to side, professional camera panning.',
+        tilt: 'Smooth vertical tilting movement up and down, showcase the dessert from different vertical angles, professional camera tilting.',
+        none: 'Static camera, no movement, stable shot.'
+      };
+
+      if (animation && animationPrompts[animation]) {
+        videoPrompt += ' ' + animationPrompts[animation];
+      }
+
       videoPrompt += ' Absolutely photorealistic, hyper-realistic, looks like real professional video, smooth camera movement, cinematic quality, perfect for Instagram Reels/TikTok, vertical format 9:16 aspect ratio (1080x1920 pixels or higher resolution). Do not modify the dessert - only adjust lighting, colors, saturation, and background.';
 
       // Обмежуємо duration до дозволених значень (4, 6, 8)
-      // Для Reels використовуємо 8 секунд для отримання 1080p роздільності
-      // Veo 3.1 підтримує 1080p тільки для 8 секунд, для 4-6 секунд - тільки 720p
-      const validDuration = 8; // Використовуємо 8 секунд для максимальної якості (1080p)
+      // Для Reels використовуємо 6 секунд (найближче до 5 секунд)
+      // Veo 3.1 підтримує 720p для 4-6 секунд, 1080p тільки для 8 секунд
+      const validDuration = 6; // 6 секунд (найближче до 5 секунд для Reels/TikTok)
 
       // Генеруємо відео через Veo 3.1 Fast (швидша версія)
       // Згідно з документацією, для image-to-video потрібно передати об'єкт з imageBytes та mimeType
@@ -549,7 +584,298 @@ ${imageDescription ? `\nОпис зображення: ${imageDescription}` : ''
       }
     }
   }
+
+  /**
+   * Генерує відео на основі зображення через KlingAI 1.6
+   * @param {string} imageUrl - URL зображення для image-to-video генерації
+   * @param {string} prompt - Текстовий опис для відео
+   * @param {string} style - Стиль генерації
+   * @param {string} location - Локація/фон
+   * @returns {Promise<Buffer>} Buffer з відео даними
+   */
+  async generateVideoWithKlingAI(imageUrl, prompt, style = null, location = null, animation = null) {
+    try {
+      if (!config.klingai.accessKey || !config.klingai.secretKey) {
+        throw new Error('KlingAI Access Key or Secret Key not configured');
+      }
+
+      console.log('🎥 Using KlingAI 1.6 for video generation');
+
+      // Формуємо промпт для відео
+      // ВАЖЛИВО: Не можна змінювати сам десерт, тільки яскравість, насиченість, кольори та фон
+      let videoPrompt = `Keep the dessert exactly as it is - do not modify, change, or alter the dessert itself. Only adjust lighting, brightness, color saturation, and background. ${prompt}`;
+      
+      // Додаємо стильові характеристики (тільки для яскравості, насиченості та кольорів)
+      const stylePrompts = {
+        bright: 'Enhance brightness and color saturation, vibrant and fresh color palette, bright natural daylight, colorful realistic background, energetic atmosphere. Keep the dessert unchanged.',
+        premium: 'Sophisticated lighting adjustments, refined color grading, premium quality look, elegant natural composition, high-end atmosphere. Keep the dessert unchanged.',
+        cozy: 'Warm lighting adjustments, warm color palette, cozy atmosphere, inviting natural lighting, comfortable feeling. Keep the dessert unchanged.',
+        wedding: 'Soft lighting adjustments, pastel color grading, elegant and romantic style, delicate atmosphere, refined appearance. Keep the dessert unchanged.',
+        custom: 'Keep the dessert unchanged.'
+      };
+
+      if (style && stylePrompts[style]) {
+        videoPrompt += ' ' + stylePrompts[style];
+      }
+
+      // Додаємо опис локації/фону (тільки фон, не десерт)
+      const locationPrompts = {
+        home: 'Change background to cozy home kitchen environment, natural home lighting, domestic atmosphere, warm and inviting background. Keep the dessert exactly as it is.',
+        cafe: 'Change background to cozy cafe environment, cafe interior background, warm cafe lighting, coffee shop atmosphere. Keep the dessert exactly as it is.',
+        restaurant: 'Change background to elegant restaurant environment, fine dining restaurant background, sophisticated restaurant lighting. Keep the dessert exactly as it is.',
+        shop: 'Change background to bakery or pastry shop display window, shop window background, commercial display lighting. Keep the dessert exactly as it is.',
+        studio: 'Change background to professional photography studio, clean studio background, professional studio lighting, minimalist studio setting. Keep the dessert exactly as it is.',
+        outdoor: 'Change background to outdoor natural environment, natural outdoor lighting, outdoor background, fresh outdoor atmosphere. Keep the dessert exactly as it is.',
+        celebration: 'Change background to festive celebration environment, party or celebration background, festive lighting. Keep the dessert exactly as it is.',
+        none: 'Keep the dessert exactly as it is.'
+      };
+
+      if (location && locationPrompts[location]) {
+        videoPrompt += ' ' + locationPrompts[location];
+      }
+
+      // Додаємо інструкції про анімацію
+      const animationPrompts = {
+        rotate: 'Smooth 360-degree rotation around the dessert, continuous circular camera movement, showcase all angles of the dessert, professional turntable effect.',
+        zoom_in: 'Smooth zoom in towards the dessert, gradually getting closer, focus on details, cinematic zoom effect, professional camera movement.',
+        zoom_out: 'Smooth zoom out from the dessert, gradually revealing more of the background, cinematic pull-back effect, professional camera movement.',
+        pan: 'Smooth horizontal panning movement left to right or right to left, showcase the dessert from side to side, professional camera panning.',
+        tilt: 'Smooth vertical tilting movement up and down, showcase the dessert from different vertical angles, professional camera tilting.',
+        none: 'Static camera, no movement, stable shot.'
+      };
+
+      if (animation && animationPrompts[animation]) {
+        videoPrompt += ' ' + animationPrompts[animation];
+      }
+
+      videoPrompt += ' Absolutely photorealistic, hyper-realistic, looks like real professional video, smooth camera movement, cinematic quality, perfect for Instagram Reels/TikTok, vertical format 9:16 aspect ratio (1080x1920 pixels or higher resolution). Do not modify the dessert - only adjust lighting, colors, saturation, and background.';
+
+      // Завантажуємо зображення
+      console.log(`[KlingAI] Loading image from URL: ${imageUrl}`);
+      const imageResponse = await fetch(imageUrl);
+      const imageBuffer = await imageResponse.arrayBuffer();
+      const imageData = Buffer.from(imageBuffer);
+      
+      // Конвертуємо в base64 для KlingAI API
+      const imageBase64 = imageData.toString('base64');
+      
+      // Формуємо запит до KlingAI API
+      // Згідно з документацією: https://app.klingai.com/global/dev/document-api/apiReference/model/imageToVideo
+      const requestBody = {
+        model: 'imageToVideo',
+        image: imageBase64, // Base64 encoded image
+        prompt: videoPrompt,
+        aspect_ratio: '9:16', // Вертикальний формат для Reels/TikTok
+        duration: 5, // 5 секунд для Reels/TikTok
+      };
+
+      console.log(`[KlingAI] Sending request to KlingAI API: ${config.klingai.apiUrl}/videos/generations`);
+      
+      // Відправляємо запит до KlingAI API
+      // KlingAI використовує Access Key та Secret Key як окремі заголовки
+      const response = await fetch(`${config.klingai.apiUrl}/videos/generations`, {
+        method: 'POST',
+        headers: {
+          'Access-Key': config.klingai.accessKey,
+          'Secret-Key': config.klingai.secretKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[KlingAI] API error: ${response.status} - ${errorText}`);
+        throw new Error(`KlingAI API error: ${response.status} - ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log(`[KlingAI] Response received:`, result);
+
+      // Перевіряємо формат відповіді
+      // KlingAI може повертати відео як URL або як base64
+      let videoUrl = null;
+      let videoBase64 = null;
+
+      if (result.video_url) {
+        videoUrl = result.video_url;
+      } else if (result.video) {
+        videoUrl = result.video;
+      } else if (result.data && result.data.video_url) {
+        videoUrl = result.data.video_url;
+      } else if (result.data && result.data.video) {
+        videoUrl = result.data.video;
+      } else if (result.video_base64) {
+        videoBase64 = result.video_base64;
+      } else if (result.data && result.data.video_base64) {
+        videoBase64 = result.data.video_base64;
+      }
+
+      // Якщо є URL, завантажуємо відео
+      if (videoUrl) {
+        console.log(`[KlingAI] Downloading video from URL: ${videoUrl}`);
+        const videoResponse = await fetch(videoUrl);
+        if (!videoResponse.ok) {
+          throw new Error(`Failed to download video: ${videoResponse.statusText}`);
+        }
+        const videoBuffer = Buffer.from(await videoResponse.arrayBuffer());
+        console.log(`[KlingAI] Video downloaded, size: ${videoBuffer.length} bytes`);
+        return videoBuffer;
+      }
+
+      // Якщо є base64, декодуємо
+      if (videoBase64) {
+        console.log(`[KlingAI] Decoding base64 video...`);
+        const videoBuffer = Buffer.from(videoBase64, 'base64');
+        console.log(`[KlingAI] Video decoded, size: ${videoBuffer.length} bytes`);
+        return videoBuffer;
+      }
+
+      // Якщо є task_id, потрібно політи статус (асинхронна генерація)
+      if (result.task_id || result.id) {
+        const taskId = result.task_id || result.id;
+        console.log(`[KlingAI] Video generation started, task_id: ${taskId}. Polling for status...`);
+        
+        // Полімо статус кожні 5 секунд
+        let pollCount = 0;
+        const maxPolls = 120; // Максимум 10 хвилин (120 * 5 секунд)
+        
+        while (pollCount < maxPolls) {
+          await new Promise((resolve) => setTimeout(resolve, 5000)); // Чекаємо 5 секунд
+          
+          const statusResponse = await fetch(`${config.klingai.apiUrl}/videos/${taskId}`, {
+            method: 'GET',
+            headers: {
+              'Access-Key': config.klingai.accessKey,
+              'Secret-Key': config.klingai.secretKey,
+            },
+          });
+
+          if (!statusResponse.ok) {
+            throw new Error(`Failed to check video status: ${statusResponse.statusText}`);
+          }
+
+          const statusResult = await statusResponse.json();
+          console.log(`[KlingAI] Poll ${pollCount + 1}/${maxPolls}, status:`, statusResult.status || statusResult.state);
+
+          // Перевіряємо статус
+          if (statusResult.status === 'completed' || statusResult.status === 'success' || statusResult.state === 'completed') {
+            // Відео готове
+            if (statusResult.video_url || statusResult.video) {
+              const finalVideoUrl = statusResult.video_url || statusResult.video;
+              console.log(`[KlingAI] Video ready, downloading from: ${finalVideoUrl}`);
+              const videoResponse = await fetch(finalVideoUrl);
+              if (!videoResponse.ok) {
+                throw new Error(`Failed to download video: ${videoResponse.statusText}`);
+              }
+              const videoBuffer = Buffer.from(await videoResponse.arrayBuffer());
+              console.log(`[KlingAI] Video downloaded, size: ${videoBuffer.length} bytes`);
+              return videoBuffer;
+            }
+          } else if (statusResult.status === 'failed' || statusResult.status === 'error' || statusResult.state === 'failed') {
+            throw new Error(`Video generation failed: ${statusResult.error || statusResult.message || 'Unknown error'}`);
+          }
+          
+          pollCount++;
+        }
+
+        throw new Error('Video generation timeout - operation took too long');
+      }
+
+      throw new Error('Unexpected response format from KlingAI API');
+
+    } catch (error) {
+      console.error('Error generating video with KlingAI:', error);
+      
+      // Повертаємо зрозуміле повідомлення про помилку
+      if (error.message.includes('quota') || error.message.includes('429')) {
+        throw new Error('Досягнуто ліміт генерації відео. Спробуй пізніше.');
+      } else if (error.message.includes('safety')) {
+        throw new Error('Відео не може бути згенероване через обмеження безпеки.');
+      } else {
+        throw new Error(`Помилка генерації відео: ${error.message}`);
+      }
+    }
+  }
+
+  /**
+   * Генерує аудіо озвучку через OpenAI TTS
+   * @param {string} text - Текст для озвучки
+   * @param {string} voice - Голос (alloy, echo, fable, onyx, nova, shimmer)
+   * @returns {Promise<Buffer>} Buffer з аудіо даними (MP3)
+   */
+  async generateAudio(text, voice = 'alloy') {
+    try {
+      if (!openaiClient) {
+        throw new Error('OpenAI client not initialized for TTS');
+      }
+
+      console.log(`[TTS] Generating audio for text: "${text.substring(0, 50)}..."`);
+
+      // Генеруємо аудіо через OpenAI TTS
+      const response = await openaiClient.audio.speech.create({
+        model: 'tts-1',
+        voice: voice,
+        input: text,
+        speed: 1.0,
+      });
+
+      // Конвертуємо stream в Buffer
+      const buffer = Buffer.from(await response.arrayBuffer());
+      console.log(`[TTS] Audio generated, size: ${buffer.length} bytes`);
+      
+      return buffer;
+    } catch (error) {
+      console.error('Error generating audio with TTS:', error);
+      throw new Error(`Помилка генерації аудіо: ${error.message}`);
+    }
+  }
+
+  /**
+   * Об'єднує відео з аудіо за допомогою ffmpeg
+   * @param {Buffer} videoBuffer - Buffer з відео даними
+   * @param {Buffer} audioBuffer - Buffer з аудіо даними
+   * @returns {Promise<Buffer>} Buffer з об'єднаним відео
+   */
+  async combineVideoWithAudio(videoBuffer, audioBuffer) {
+    const tempDir = tmpdir();
+    const videoPath = join(tempDir, `video_${Date.now()}.mp4`);
+    const audioPath = join(tempDir, `audio_${Date.now()}.mp3`);
+    const outputPath = join(tempDir, `output_${Date.now()}.mp4`);
+
+    try {
+      // Зберігаємо тимчасові файли
+      writeFileSync(videoPath, videoBuffer);
+      writeFileSync(audioPath, audioBuffer);
+
+      console.log(`[ffmpeg] Combining video with audio...`);
+
+      // Використовуємо ffmpeg для об'єднання
+      // -i video.mp4 -i audio.mp3 -c:v copy -c:a aac -shortest output.mp4
+      // -shortest обрізає відео/аудіо до найкоротшого
+      await execAsync(
+        `ffmpeg -i "${videoPath}" -i "${audioPath}" -c:v copy -c:a aac -shortest -y "${outputPath}"`
+      );
+
+      // Читаємо результат
+      const combinedBuffer = readFileSync(outputPath);
+      console.log(`[ffmpeg] Video and audio combined, size: ${combinedBuffer.length} bytes`);
+
+      return combinedBuffer;
+    } catch (error) {
+      console.error('Error combining video with audio:', error);
+      throw new Error(`Помилка об'єднання відео з аудіо: ${error.message}`);
+    } finally {
+      // Видаляємо тимчасові файли
+      try {
+        unlinkSync(videoPath);
+        unlinkSync(audioPath);
+        unlinkSync(outputPath);
+      } catch (cleanupError) {
+        console.warn('[ffmpeg] Warning: Failed to cleanup temp files:', cleanupError);
+      }
+    }
+  }
 }
 
 export const aiService = new AIService();
-

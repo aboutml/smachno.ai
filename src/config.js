@@ -12,6 +12,11 @@ export const config = {
   gemini: {
     apiKey: (process.env.GEMINI_API_KEY || '').trim(),
   },
+  klingai: {
+    accessKey: (process.env.KLINGAI_ACCESS_KEY || '').trim(),
+    secretKey: (process.env.KLINGAI_SECRET_KEY || '').trim(),
+    apiUrl: process.env.KLINGAI_API_URL || 'https://api.klingai.com/v1',
+  },
   ai: {
     imageModel: process.env.IMAGE_MODEL || 'gemini-2.5-flash-image', // Використовуємо тільки Gemini
   },
