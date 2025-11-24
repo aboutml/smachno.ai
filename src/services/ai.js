@@ -686,17 +686,22 @@ ${imageDescription ? `\nОпис зображення: ${imageDescription}` : ''
       // Формуємо запит до KlingAI API
       // Згідно з документацією: POST /v1/videos/image2video
       // Автентифікація: Authorization: Bearer {apiKey}
+      // ВАЖЛИВО: camera_control підтримується тільки в pro mode з 5s duration та kling-v1-5
+      const useAnimation = animation && animation !== 'none';
+      const modelName = useAnimation ? 'kling-v1-5' : 'kling-v1-6'; // Для анімації використовуємо v1-5
+      
       const requestBody = {
-        model_name: 'kling-v1-6', // Використовуємо модель 1.6
+        model_name: modelName,
         mode: 'pro', // Professional mode для кращої якості
-        duration: '5', // 5 секунд (string format)
+        duration: '5', // 5 секунд (string format) - обов'язково для camera_control
         image: imageBase64, // Base64 encoded image (без префіксу data:image/png;base64,)
         prompt: videoPrompt,
         cfg_scale: 0.5, // Гнучкість генерації
       };
 
       // Додаємо camera_control для анімації, якщо вказано
-      if (animation && animation !== 'none') {
+      // Підтримується тільки в pro mode з 5s duration та kling-v1-5
+      if (useAnimation) {
         const cameraControl = {
           type: 'simple',
           config: {}
@@ -726,6 +731,9 @@ ${imageDescription ? `\nОпис зображення: ${imageDescription}` : ''
         }
 
         requestBody.camera_control = cameraControl;
+        console.log(`[KlingAI] Using camera_control with model ${modelName} for animation: ${animation}`);
+      } else {
+        console.log(`[KlingAI] No animation, using model ${modelName}`);
       }
 
       const endpoint = `${config.klingai.apiUrl}/v1/videos/image2video`;
