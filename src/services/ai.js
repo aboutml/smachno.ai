@@ -7,6 +7,7 @@ import { promisify } from 'util';
 import { writeFileSync, unlinkSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
+import jwt from 'jsonwebtoken';
 
 const execAsync = promisify(exec);
 
@@ -586,18 +587,41 @@ ${imageDescription ? `\nОпис зображення: ${imageDescription}` : ''
   }
 
   /**
-   * Генерує відео на основі зображення через KlingAI 1.6
-   * @param {string} imageUrl - URL зображення для image-to-video генерації
-   * @param {string} prompt - Текстовий опис для відео
-   * @param {string} style - Стиль генерації
-   * @param {string} location - Локація/фон
-   * @returns {Promise<Buffer>} Buffer з відео даними
+   * Генерує JWT токен для KlingAI API автентифікації
+   * @param {string} accessKey - Access Key
+   * @param {string} secretKey - Secret Key
+   * @returns {string} JWT токен
    */
+  generateKlingAIToken(accessKey, secretKey) {
+    const headers = {
+      alg: 'HS256',
+      typ: 'JWT'
+    };
+
+    const payload = {
+      iss: accessKey, // issuer = access key
+      exp: Math.floor(Date.now() / 1000) + 1800, // expires in 30 minutes (1800 seconds)
+      nbf: Math.floor(Date.now() / 1000) - 5 // not before (current time - 5 seconds)
+    };
+
+    // Генеруємо JWT токен з використанням secretKey як секрету
+    const token = jwt.sign(payload, secretKey, { 
+      algorithm: 'HS256',
+      header: headers 
+    });
+
+    return token;
+  }
+
   async generateVideoWithKlingAI(imageUrl, prompt, style = null, location = null, animation = null) {
     try {
       if (!config.klingai.accessKey || !config.klingai.secretKey) {
         throw new Error('KlingAI Access Key or Secret Key not configured');
       }
+
+      // Генеруємо JWT токен для автентифікації
+      const bearerToken = this.generateKlingAIToken(config.klingai.accessKey, config.klingai.secretKey);
+      console.log('[KlingAI] Generated JWT token for authentication');
 
       console.log('🎥 Using KlingAI 1.6 for video generation');
 
@@ -660,24 +684,59 @@ ${imageDescription ? `\nОпис зображення: ${imageDescription}` : ''
       const imageBase64 = imageData.toString('base64');
       
       // Формуємо запит до KlingAI API
-      // Згідно з документацією: https://app.klingai.com/global/dev/document-api/apiReference/model/imageToVideo
+      // Згідно з документацією: POST /v1/videos/image2video
+      // Автентифікація: Authorization: Bearer {apiKey}
       const requestBody = {
-        model: 'imageToVideo',
-        image: imageBase64, // Base64 encoded image
+        model_name: 'kling-v1-6', // Використовуємо модель 1.6
+        mode: 'pro', // Professional mode для кращої якості
+        duration: '5', // 5 секунд (string format)
+        image: imageBase64, // Base64 encoded image (без префіксу data:image/png;base64,)
         prompt: videoPrompt,
-        aspect_ratio: '9:16', // Вертикальний формат для Reels/TikTok
-        duration: 5, // 5 секунд для Reels/TikTok
+        cfg_scale: 0.5, // Гнучкість генерації
       };
 
-      console.log(`[KlingAI] Sending request to KlingAI API: ${config.klingai.apiUrl}/videos/generations`);
-      
+      // Додаємо camera_control для анімації, якщо вказано
+      if (animation && animation !== 'none') {
+        const cameraControl = {
+          type: 'simple',
+          config: {}
+        };
+
+        switch (animation) {
+          case 'rotate':
+            // Обертання 360° - використовуємо roll
+            cameraControl.config.roll = 10;
+            break;
+          case 'zoom_in':
+            // Наближення - негативне значення zoom
+            cameraControl.config.zoom = -10;
+            break;
+          case 'zoom_out':
+            // Віддалення - позитивне значення zoom
+            cameraControl.config.zoom = 10;
+            break;
+          case 'pan':
+            // Рух вліво-вправо - horizontal
+            cameraControl.config.horizontal = 10;
+            break;
+          case 'tilt':
+            // Рух вгору-вниз - vertical
+            cameraControl.config.vertical = 10;
+            break;
+        }
+
+        requestBody.camera_control = cameraControl;
+      }
+
+      const endpoint = `${config.klingai.apiUrl}/v1/videos/image2video`;
+      console.log(`[KlingAI] Sending request to: ${endpoint}`);
+
       // Відправляємо запит до KlingAI API
-      // KlingAI використовує Access Key та Secret Key як окремі заголовки
-      const response = await fetch(`${config.klingai.apiUrl}/videos/generations`, {
+      // Автентифікація через Bearer token (використовуємо apiKey або accessKey)
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
-          'Access-Key': config.klingai.accessKey,
-          'Secret-Key': config.klingai.secretKey,
+          'Authorization': `Bearer ${bearerToken}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(requestBody),
@@ -692,97 +751,82 @@ ${imageDescription ? `\nОпис зображення: ${imageDescription}` : ''
       const result = await response.json();
       console.log(`[KlingAI] Response received:`, result);
 
-      // Перевіряємо формат відповіді
-      // KlingAI може повертати відео як URL або як base64
-      let videoUrl = null;
-      let videoBase64 = null;
-
-      if (result.video_url) {
-        videoUrl = result.video_url;
-      } else if (result.video) {
-        videoUrl = result.video;
-      } else if (result.data && result.data.video_url) {
-        videoUrl = result.data.video_url;
-      } else if (result.data && result.data.video) {
-        videoUrl = result.data.video;
-      } else if (result.video_base64) {
-        videoBase64 = result.video_base64;
-      } else if (result.data && result.data.video_base64) {
-        videoBase64 = result.data.video_base64;
+      // Перевіряємо код відповіді (0 = успіх)
+      if (result.code !== 0) {
+        throw new Error(`KlingAI API error: ${result.message || 'Unknown error'}`);
       }
 
-      // Якщо є URL, завантажуємо відео
-      if (videoUrl) {
-        console.log(`[KlingAI] Downloading video from URL: ${videoUrl}`);
-        const videoResponse = await fetch(videoUrl);
-        if (!videoResponse.ok) {
-          throw new Error(`Failed to download video: ${videoResponse.statusText}`);
+      // Отримуємо task_id з відповіді
+      const taskId = result.data?.task_id;
+      if (!taskId) {
+        throw new Error('No task_id received from KlingAI API');
+      }
+
+      console.log(`[KlingAI] Video generation started, task_id: ${taskId}. Polling for status...`);
+      
+      // Полімо статус кожні 5 секунд
+      let pollCount = 0;
+      const maxPolls = 120; // Максимум 10 хвилин (120 * 5 секунд)
+      
+      while (pollCount < maxPolls) {
+        await new Promise((resolve) => setTimeout(resolve, 5000)); // Чекаємо 5 секунд
+        
+        // Запитуємо статус задачі: GET /v1/videos/image2video/{task_id}
+        const statusEndpoint = `${config.klingai.apiUrl}/v1/videos/image2video/${taskId}`;
+        console.log(`[KlingAI] Checking status at: ${statusEndpoint} (poll ${pollCount + 1}/${maxPolls})`);
+        
+        const statusResponse = await fetch(statusEndpoint, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${bearerToken}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (!statusResponse.ok) {
+          throw new Error(`Failed to check video status: ${statusResponse.statusText}`);
         }
-        const videoBuffer = Buffer.from(await videoResponse.arrayBuffer());
-        console.log(`[KlingAI] Video downloaded, size: ${videoBuffer.length} bytes`);
-        return videoBuffer;
-      }
 
-      // Якщо є base64, декодуємо
-      if (videoBase64) {
-        console.log(`[KlingAI] Decoding base64 video...`);
-        const videoBuffer = Buffer.from(videoBase64, 'base64');
-        console.log(`[KlingAI] Video decoded, size: ${videoBuffer.length} bytes`);
-        return videoBuffer;
-      }
-
-      // Якщо є task_id, потрібно політи статус (асинхронна генерація)
-      if (result.task_id || result.id) {
-        const taskId = result.task_id || result.id;
-        console.log(`[KlingAI] Video generation started, task_id: ${taskId}. Polling for status...`);
+        const statusResult = await statusResponse.json();
         
-        // Полімо статус кожні 5 секунд
-        let pollCount = 0;
-        const maxPolls = 120; // Максимум 10 хвилин (120 * 5 секунд)
-        
-        while (pollCount < maxPolls) {
-          await new Promise((resolve) => setTimeout(resolve, 5000)); // Чекаємо 5 секунд
-          
-          const statusResponse = await fetch(`${config.klingai.apiUrl}/videos/${taskId}`, {
-            method: 'GET',
-            headers: {
-              'Access-Key': config.klingai.accessKey,
-              'Secret-Key': config.klingai.secretKey,
-            },
-          });
+        // Перевіряємо код відповіді
+        if (statusResult.code !== 0) {
+          throw new Error(`KlingAI API error: ${statusResult.message || 'Unknown error'}`);
+        }
 
-          if (!statusResponse.ok) {
-            throw new Error(`Failed to check video status: ${statusResponse.statusText}`);
-          }
+        const taskStatus = statusResult.data?.task_status;
+        console.log(`[KlingAI] Task status: ${taskStatus}`);
 
-          const statusResult = await statusResponse.json();
-          console.log(`[KlingAI] Poll ${pollCount + 1}/${maxPolls}, status:`, statusResult.status || statusResult.state);
-
-          // Перевіряємо статус
-          if (statusResult.status === 'completed' || statusResult.status === 'success' || statusResult.state === 'completed') {
-            // Відео готове
-            if (statusResult.video_url || statusResult.video) {
-              const finalVideoUrl = statusResult.video_url || statusResult.video;
-              console.log(`[KlingAI] Video ready, downloading from: ${finalVideoUrl}`);
-              const videoResponse = await fetch(finalVideoUrl);
-              if (!videoResponse.ok) {
-                throw new Error(`Failed to download video: ${videoResponse.statusText}`);
-              }
-              const videoBuffer = Buffer.from(await videoResponse.arrayBuffer());
-              console.log(`[KlingAI] Video downloaded, size: ${videoBuffer.length} bytes`);
-              return videoBuffer;
+        // Перевіряємо статус задачі
+        if (taskStatus === 'succeed') {
+          // Відео готове
+          const videos = statusResult.data?.task_result?.videos;
+          if (videos && videos.length > 0 && videos[0].url) {
+            const videoUrl = videos[0].url;
+            console.log(`[KlingAI] Video ready, downloading from: ${videoUrl}`);
+            const videoResponse = await fetch(videoUrl);
+            if (!videoResponse.ok) {
+              throw new Error(`Failed to download video: ${videoResponse.statusText}`);
             }
-          } else if (statusResult.status === 'failed' || statusResult.status === 'error' || statusResult.state === 'failed') {
-            throw new Error(`Video generation failed: ${statusResult.error || statusResult.message || 'Unknown error'}`);
+            const videoBuffer = Buffer.from(await videoResponse.arrayBuffer());
+            console.log(`[KlingAI] Video downloaded, size: ${videoBuffer.length} bytes`);
+            return videoBuffer;
+          } else {
+            throw new Error('Video URL not found in response');
           }
-          
+        } else if (taskStatus === 'failed') {
+          const errorMsg = statusResult.data?.task_status_msg || 'Unknown error';
+          throw new Error(`Video generation failed: ${errorMsg}`);
+        } else if (taskStatus === 'submitted' || taskStatus === 'processing') {
+          // Продовжуємо полінг
           pollCount++;
+          continue;
+        } else {
+          throw new Error(`Unknown task status: ${taskStatus}`);
         }
-
-        throw new Error('Video generation timeout - operation took too long');
       }
 
-      throw new Error('Unexpected response format from KlingAI API');
+      throw new Error('Video generation timeout - operation took too long');
 
     } catch (error) {
       console.error('Error generating video with KlingAI:', error);

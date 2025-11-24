@@ -13,9 +13,9 @@ export const config = {
     apiKey: (process.env.GEMINI_API_KEY || '').trim(),
   },
   klingai: {
-    accessKey: (process.env.KLINGAI_ACCESS_KEY || '').trim(),
-    secretKey: (process.env.KLINGAI_SECRET_KEY || '').trim(),
-    apiUrl: process.env.KLINGAI_API_URL || 'https://api.klingai.com/v1',
+    accessKey: (process.env.KLINGAI_ACCESS_KEY || '').trim(), // Access Key для генерації JWT токену
+    secretKey: (process.env.KLINGAI_SECRET_KEY || '').trim(), // Secret Key для генерації JWT токену
+    apiUrl: process.env.KLINGAI_API_URL || 'https://api-singapore.klingai.com',
   },
   ai: {
     imageModel: process.env.IMAGE_MODEL || 'gemini-2.5-flash-image', // Використовуємо тільки Gemini
