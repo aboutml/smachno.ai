@@ -99,8 +99,14 @@ export const registerCallbacks = (bot) => {
       // Якщо це фото - одразу генеруємо
       if (contentType === 'photo') {
         await ctx.editMessageText('Чудово! Починаю генерувати 😋\n\nЦе займе близько 1 хвилини.');
-        await ctx.answerCbQuery();
-        await processGeneration(ctx, session);
+        // Відповідаємо на callback query одразу, щоб уникнути таймауту Telegram (90 секунд)
+        await ctx.answerCbQuery('⏳ Генерую фото... Це займе до хвилини ⏳');
+        
+        // Запускаємо генерацію асинхронно (не чекаємо завершення)
+        processGeneration(ctx, session).catch((error) => {
+          console.error('[callbacks] Error in processGeneration:', error);
+          ctx.reply(`❌ Помилка генерації: ${error.message || 'Невідома помилка'}`).catch(console.error);
+        });
       } else {
         // Для відео - показуємо вибір анімації
         await ctx.editMessageText('Обери тип анімації для відео 🎬\n\nЯка анімація тобі подобається?', {
@@ -140,8 +146,14 @@ export const registerCallbacks = (bot) => {
 
       const contentType = session.contentType === 'kling' ? 'KlingAI 1.6' : 'Veo 3.1';
       await ctx.editMessageText(`Чудово! Обрано анімацію: ${animationNames[animationType]} 🎬\n\nПочинаю генерувати відео через ${contentType}...\n\nЦе займе 2-5 хвилин ⏳`);
-      await ctx.answerCbQuery();
-      await processGeneration(ctx, session);
+      // Відповідаємо на callback query одразу, щоб уникнути таймауту Telegram (90 секунд)
+      await ctx.answerCbQuery('⏳ Генерую відео... Це може зайняти до 50 хвилин ⏳');
+      
+      // Запускаємо генерацію асинхронно (не чекаємо завершення)
+      processGeneration(ctx, session).catch((error) => {
+        console.error('[callbacks] Error in processGeneration:', error);
+        ctx.reply(`❌ Помилка генерації: ${error.message || 'Невідома помилка'}`).catch(console.error);
+      });
     } catch (error) {
       console.error('Error handling animation selection:', error);
       await ctx.answerCbQuery('Помилка при обробці. Спробуй ще раз.');

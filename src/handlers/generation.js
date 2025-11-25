@@ -168,10 +168,43 @@ export async function processGeneration(ctx, session) {
 
       // Відправляємо результат
       const videoSource = isKlingAI ? 'KlingAI 1.6' : 'Veo 3.1';
-      await ctx.reply(`Готово! Ось твоє відео для Reels 🎬✨ (згенеровано через ${videoSource}, з аудіо озвучкою)`);
-      await ctx.replyWithVideo(savedVideoUrl, {
-        caption: 'Твоє відео готове для Instagram Reels/TikTok!',
-      });
+      const hasAudio = finalVideoBuffer !== videoBuffer;
+      await ctx.reply(`Готово! Ось твоє відео для Reels 🎬✨ (згенеровано через ${videoSource}${hasAudio ? ', з аудіо озвучкою' : ''})`);
+      
+      // Спробуємо відправити відео через Buffer (напряму), якщо не вийде - через URL
+      // Telegram підтримує до 50MB для відео через Buffer
+      // Перевіряємо розмір відео (Telegram має ліміт 50MB)
+      const videoSizeMB = finalVideoBuffer.length / (1024 * 1024);
+      console.log(`[generation] Video size: ${videoSizeMB.toFixed(2)} MB`);
+      
+      if (videoSizeMB > 50) {
+        console.warn('[generation] Video too large for direct upload, using URL');
+        // Відео занадто велике, використовуємо URL
+        await ctx.replyWithVideo(savedVideoUrl, {
+          caption: 'Твоє відео готове для Instagram Reels/TikTok!',
+        });
+      } else {
+        try {
+          // Відправляємо Buffer напряму (Telegraf підтримує Buffer або { source: buffer })
+          await ctx.replyWithVideo({ source: finalVideoBuffer, filename: 'video.mp4' }, {
+            caption: 'Твоє відео готове для Instagram Reels/TikTok!',
+          });
+          console.log('[generation] Video sent successfully via Buffer');
+        } catch (bufferError) {
+          console.warn('[generation] Failed to send video via Buffer, trying URL:', bufferError.message);
+          // Fallback: відправляємо через URL
+          try {
+            await ctx.replyWithVideo(savedVideoUrl, {
+              caption: 'Твоє відео готове для Instagram Reels/TikTok!',
+            });
+            console.log('[generation] Video sent successfully via URL');
+          } catch (urlError) {
+            console.error('[generation] Failed to send video via URL:', urlError);
+            // Останній fallback: відправляємо посилання
+            await ctx.reply(`❌ Не вдалося відправити відео автоматично.\n\n📥 Завантаж відео за посиланням:\n${savedVideoUrl}`);
+          }
+        }
+      }
     } else {
       // Генеруємо зображення з урахуванням стилю та локації
       const generatedImages = await aiService.generateImage(

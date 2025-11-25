@@ -502,7 +502,7 @@ ${imageDescription ? `\nОпис зображення: ${imageDescription}` : ''
 
       // Поллімо статус операції (за документацією - кожні 10 секунд)
       let pollCount = 0;
-      const maxPolls = 60; // Максимум 10 хвилин (60 * 10 секунд)
+      const maxPolls = 300; // Максимум 50 хвилин (300 * 10 секунд)
       
       while (!operation.done && pollCount < maxPolls) {
         console.log(`[Veo] Polling status... (${pollCount + 1}/${maxPolls})`);
@@ -772,65 +772,107 @@ ${imageDescription ? `\nОпис зображення: ${imageDescription}` : ''
 
       console.log(`[KlingAI] Video generation started, task_id: ${taskId}. Polling for status...`);
       
-      // Полімо статус кожні 5 секунд
+      // Полімо статус кожні 10 секунд
       let pollCount = 0;
-      const maxPolls = 120; // Максимум 10 хвилин (120 * 5 секунд)
+      const maxPolls = 300; // Максимум 50 хвилин (300 * 10 секунд)
+      const fetchTimeout = 30000; // 30 секунд таймаут для кожного fetch запиту
       
       while (pollCount < maxPolls) {
-        await new Promise((resolve) => setTimeout(resolve, 5000)); // Чекаємо 5 секунд
+        await new Promise((resolve) => setTimeout(resolve, 10000)); // Чекаємо 10 секунд
         
         // Запитуємо статус задачі: GET /v1/videos/image2video/{task_id}
         const statusEndpoint = `${config.klingai.apiUrl}/v1/videos/image2video/${taskId}`;
         console.log(`[KlingAI] Checking status at: ${statusEndpoint} (poll ${pollCount + 1}/${maxPolls})`);
         
-        const statusResponse = await fetch(statusEndpoint, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${bearerToken}`,
-            'Content-Type': 'application/json',
-          },
-        });
+        try {
+          // Використовуємо AbortController для таймауту fetch запиту
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), fetchTimeout);
+          
+          const statusResponse = await fetch(statusEndpoint, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${bearerToken}`,
+              'Content-Type': 'application/json',
+            },
+            signal: controller.signal,
+          });
 
-        if (!statusResponse.ok) {
-          throw new Error(`Failed to check video status: ${statusResponse.statusText}`);
-        }
+          clearTimeout(timeoutId);
 
-        const statusResult = await statusResponse.json();
-        
-        // Перевіряємо код відповіді
-        if (statusResult.code !== 0) {
-          throw new Error(`KlingAI API error: ${statusResult.message || 'Unknown error'}`);
-        }
-
-        const taskStatus = statusResult.data?.task_status;
-        console.log(`[KlingAI] Task status: ${taskStatus}`);
-
-        // Перевіряємо статус задачі
-        if (taskStatus === 'succeed') {
-          // Відео готове
-          const videos = statusResult.data?.task_result?.videos;
-          if (videos && videos.length > 0 && videos[0].url) {
-            const videoUrl = videos[0].url;
-            console.log(`[KlingAI] Video ready, downloading from: ${videoUrl}`);
-            const videoResponse = await fetch(videoUrl);
-            if (!videoResponse.ok) {
-              throw new Error(`Failed to download video: ${videoResponse.statusText}`);
-            }
-            const videoBuffer = Buffer.from(await videoResponse.arrayBuffer());
-            console.log(`[KlingAI] Video downloaded, size: ${videoBuffer.length} bytes`);
-            return videoBuffer;
-          } else {
-            throw new Error('Video URL not found in response');
+          if (!statusResponse.ok) {
+            console.warn(`[KlingAI] Status check failed (${statusResponse.status}), retrying...`);
+            pollCount++;
+            continue; // Продовжуємо полінг навіть якщо запит не вдався
           }
-        } else if (taskStatus === 'failed') {
-          const errorMsg = statusResult.data?.task_status_msg || 'Unknown error';
-          throw new Error(`Video generation failed: ${errorMsg}`);
-        } else if (taskStatus === 'submitted' || taskStatus === 'processing') {
-          // Продовжуємо полінг
+
+          const statusResult = await statusResponse.json();
+          
+          // Перевіряємо код відповіді
+          if (statusResult.code !== 0) {
+            console.warn(`[KlingAI] API returned error code ${statusResult.code}: ${statusResult.message || 'Unknown error'}, retrying...`);
+            pollCount++;
+            continue; // Продовжуємо полінг навіть якщо є помилка
+          }
+
+          const taskStatus = statusResult.data?.task_status;
+          console.log(`[KlingAI] Task status: ${taskStatus}`);
+
+          // Перевіряємо статус задачі
+          if (taskStatus === 'succeed') {
+            // Відео готове
+            const videos = statusResult.data?.task_result?.videos;
+            if (videos && videos.length > 0 && videos[0].url) {
+              const videoUrl = videos[0].url;
+              console.log(`[KlingAI] Video ready, downloading from: ${videoUrl}`);
+              
+              // Завантажуємо відео з таймаутом
+              const downloadController = new AbortController();
+              const downloadTimeoutId = setTimeout(() => downloadController.abort(), 120000); // 2 хвилини для завантаження
+              
+              try {
+                const videoResponse = await fetch(videoUrl, {
+                  signal: downloadController.signal,
+                });
+                clearTimeout(downloadTimeoutId);
+                
+                if (!videoResponse.ok) {
+                  throw new Error(`Failed to download video: ${videoResponse.statusText}`);
+                }
+                const videoBuffer = Buffer.from(await videoResponse.arrayBuffer());
+                console.log(`[KlingAI] Video downloaded, size: ${videoBuffer.length} bytes`);
+                return videoBuffer;
+              } catch (downloadError) {
+                clearTimeout(downloadTimeoutId);
+                if (downloadError.name === 'AbortError') {
+                  throw new Error('Video download timeout - file too large or connection too slow');
+                }
+                throw downloadError;
+              }
+            } else {
+              throw new Error('Video URL not found in response');
+            }
+          } else if (taskStatus === 'failed') {
+            const errorMsg = statusResult.data?.task_status_msg || 'Unknown error';
+            throw new Error(`Video generation failed: ${errorMsg}`);
+          } else if (taskStatus === 'submitted' || taskStatus === 'processing') {
+            // Продовжуємо полінг
+            pollCount++;
+            continue;
+          } else {
+            console.warn(`[KlingAI] Unknown task status: ${taskStatus}, continuing polling...`);
+            pollCount++;
+            continue; // Продовжуємо полінг навіть для невідомого статусу
+          }
+        } catch (fetchError) {
+          // Обробляємо помилки fetch (таймаут, мережа тощо)
+          if (fetchError.name === 'AbortError') {
+            console.warn(`[KlingAI] Fetch timeout on poll ${pollCount + 1}, retrying...`);
+          } else {
+            console.warn(`[KlingAI] Fetch error on poll ${pollCount + 1}: ${fetchError.message}, retrying...`);
+          }
           pollCount++;
-          continue;
-        } else {
-          throw new Error(`Unknown task status: ${taskStatus}`);
+          continue; // Продовжуємо полінг навіть при помилках мережі
         }
       }
 
