@@ -4,7 +4,7 @@ import fetch from 'node-fetch';
 import { config } from '../config.js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { writeFileSync, unlinkSync, readFileSync } from 'fs';
+import { writeFileSync, unlinkSync, readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import jwt from 'jsonwebtoken';
@@ -932,6 +932,14 @@ ${imageDescription ? `\nОпис зображення: ${imageDescription}` : ''
    * @returns {Promise<Buffer>} Buffer з об'єднаним відео
    */
   async combineVideoWithAudio(videoBuffer, audioBuffer) {
+    // Перевіряємо, чи ffmpeg доступний
+    try {
+      await execAsync('which ffmpeg');
+    } catch (error) {
+      console.error('[ffmpeg] ffmpeg not found in PATH. Please install ffmpeg.');
+      throw new Error('ffmpeg не встановлено. Відео буде без аудіо.');
+    }
+
     const tempDir = tmpdir();
     const videoPath = join(tempDir, `video_${Date.now()}.mp4`);
     const audioPath = join(tempDir, `audio_${Date.now()}.mp3`);
@@ -947,9 +955,13 @@ ${imageDescription ? `\nОпис зображення: ${imageDescription}` : ''
       // Використовуємо ffmpeg для об'єднання
       // -i video.mp4 -i audio.mp3 -c:v copy -c:a aac -shortest output.mp4
       // -shortest обрізає відео/аудіо до найкоротшого
-      await execAsync(
+      const { stdout, stderr } = await execAsync(
         `ffmpeg -i "${videoPath}" -i "${audioPath}" -c:v copy -c:a aac -shortest -y "${outputPath}"`
       );
+
+      if (stderr && !stderr.includes('Stream mapping') && !stderr.includes('Press [q]')) {
+        console.warn('[ffmpeg] stderr:', stderr);
+      }
 
       // Читаємо результат
       const combinedBuffer = readFileSync(outputPath);
@@ -962,9 +974,9 @@ ${imageDescription ? `\nОпис зображення: ${imageDescription}` : ''
     } finally {
       // Видаляємо тимчасові файли
       try {
-        unlinkSync(videoPath);
-        unlinkSync(audioPath);
-        unlinkSync(outputPath);
+        if (existsSync(videoPath)) unlinkSync(videoPath);
+        if (existsSync(audioPath)) unlinkSync(audioPath);
+        if (existsSync(outputPath)) unlinkSync(outputPath);
       } catch (cleanupError) {
         console.warn('[ffmpeg] Warning: Failed to cleanup temp files:', cleanupError);
       }

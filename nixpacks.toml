@@ -5,7 +5,7 @@ nixPkgs = ["nodejs_20", "ffmpeg"]
 cmds = ["npm ci"]
 
 [phases.build]
-cmds = ["npm run build || true"]
+cmds = ["npm run build || true", "which ffmpeg || echo 'Warning: ffmpeg not found in PATH'"]
 
 [start]
 cmd = "npm start"

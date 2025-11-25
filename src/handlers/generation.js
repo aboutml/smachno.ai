@@ -134,25 +134,9 @@ export async function processGeneration(ctx, session) {
         );
       }
 
-      // Генеруємо аудіо озвучку на основі підпису
-      console.log('[generation] Generating audio narration...');
-      let finalVideoBuffer = videoBuffer;
-      try {
-        const audioText = caption || imageDescription || 'Смачний десерт для Instagram Reels';
-        const audioBuffer = await aiService.generateAudio(audioText, 'alloy');
-        
-        // Об'єднуємо відео з аудіо
-        console.log('[generation] Combining video with audio...');
-        finalVideoBuffer = await aiService.combineVideoWithAudio(videoBuffer, audioBuffer);
-        console.log('[generation] Video and audio combined successfully');
-      } catch (audioError) {
-        console.error('[generation] Error adding audio, using video without audio:', audioError);
-        // Продовжуємо без аудіо, якщо є помилка
-      }
-
-      // Зберігаємо відео
+      // Зберігаємо відео (без аудіо)
       const savedVideoUrl = await storageService.saveGeneratedVideo(
-        finalVideoBuffer,
+        videoBuffer,
         `${ctx.from.id}_${Date.now()}.mp4`
       );
 
@@ -168,13 +152,12 @@ export async function processGeneration(ctx, session) {
 
       // Відправляємо результат
       const videoSource = isKlingAI ? 'KlingAI 1.6' : 'Veo 3.1';
-      const hasAudio = finalVideoBuffer !== videoBuffer;
-      await ctx.reply(`Готово! Ось твоє відео для Reels 🎬✨ (згенеровано через ${videoSource}${hasAudio ? ', з аудіо озвучкою' : ''})`);
+      await ctx.reply(`Готово! Ось твоє відео для Reels 🎬✨ (згенеровано через ${videoSource})`);
       
       // Спробуємо відправити відео через Buffer (напряму), якщо не вийде - через URL
       // Telegram підтримує до 50MB для відео через Buffer
       // Перевіряємо розмір відео (Telegram має ліміт 50MB)
-      const videoSizeMB = finalVideoBuffer.length / (1024 * 1024);
+      const videoSizeMB = videoBuffer.length / (1024 * 1024);
       console.log(`[generation] Video size: ${videoSizeMB.toFixed(2)} MB`);
       
       if (videoSizeMB > 50) {
@@ -186,7 +169,7 @@ export async function processGeneration(ctx, session) {
       } else {
         try {
           // Відправляємо Buffer напряму (Telegraf підтримує Buffer або { source: buffer })
-          await ctx.replyWithVideo({ source: finalVideoBuffer, filename: 'video.mp4' }, {
+          await ctx.replyWithVideo({ source: videoBuffer, filename: 'video.mp4' }, {
             caption: 'Твоє відео готове для Instagram Reels/TikTok!',
           });
           console.log('[generation] Video sent successfully via Buffer');
