@@ -81,6 +81,7 @@ export const registerCallbacks = (bot) => {
   });
 
   // Обробка вибору типу контенту
+  // За замовчуванням використовуємо KlingAI для відео (Veo залишається в коді для майбутнього використання)
   bot.action(/^content_(photo|video|kling)$/, async (ctx) => {
     try {
       const contentType = ctx.match[1];
@@ -92,8 +93,8 @@ export const registerCallbacks = (bot) => {
       }
 
       // Оновлюємо тип контенту в сесії
-      // Для KlingAI зберігаємо як 'kling', але в processGeneration обробляємо як 'video'
-      session.contentType = contentType === 'kling' ? 'kling' : contentType;
+      // За замовчуванням використовуємо KlingAI для відео (content_video теж використовує KlingAI)
+      session.contentType = (contentType === 'video' || contentType === 'kling') ? 'kling' : contentType;
       setSession(ctx.from.id, session);
 
       // Якщо це фото - одразу генеруємо
