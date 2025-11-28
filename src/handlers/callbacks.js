@@ -750,6 +750,29 @@ export const registerCallbacks = (bot) => {
   });
 
   // Повернення до меню
+  // Повернення в головне меню без привітання (для після генерації)
+  bot.action('back_to_menu_simple', async (ctx) => {
+    try {
+      try {
+        await ctx.editMessageText('Обери, що хочеш зробити:', {
+          parse_mode: 'HTML',
+          reply_markup: mainMenuKeyboard,
+        });
+      } catch (editError) {
+        // Якщо не вдалося відредагувати (наприклад, це фото), відправляємо нове повідомлення
+        await ctx.reply('Обери, що хочеш зробити:', {
+          parse_mode: 'HTML',
+          reply_markup: mainMenuKeyboard,
+        });
+      }
+      await ctx.answerCbQuery();
+    } catch (error) {
+      console.error('Error handling back to menu simple:', error);
+      await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
+    }
+  });
+
+  // Повернення в головне меню з привітанням (для інших випадків)
   bot.action('back_to_menu', async (ctx) => {
     try {
       const user = ctx.from;

@@ -68,14 +68,11 @@ export const animationSelectionKeyboard = {
 };
 
 /**
- * Клавіатура після генерації (оптимізована)
+ * Клавіатура після генерації (спрощена - тільки головне меню)
  */
 export const postGenerationKeyboard = {
   inline_keyboard: [
-    [{ text: '🔄 Повторити (інший стиль)', callback_data: 'regenerate_with_new_style' }],
-    [{ text: '⬆️ Завантажити нове фото', callback_data: 'new_photo' }],
-    [{ text: '💰 Отримати більше генерацій', callback_data: 'buy_generations' }],
-    [{ text: '🏠 Головне меню', callback_data: 'back_to_menu' }]
+    [{ text: '🏠 Головне меню', callback_data: 'back_to_menu_simple' }]
   ],
 };
 
