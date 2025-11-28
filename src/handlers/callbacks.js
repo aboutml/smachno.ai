@@ -12,6 +12,7 @@ import {
   stylesMenuKeyboard, 
   categoryKeyboard,
   settingsKeyboard,
+  myAccountMenuKeyboard,
   creativeKeyboard,
   backKeyboard,
   createPaymentKeyboard
@@ -23,10 +24,11 @@ import { processGeneration } from './generation.js';
  * Реєстрація всіх callback обробників
  */
 export const registerCallbacks = (bot) => {
-  // Обробка вибору стилю
-  bot.action(/^style_(bright|premium|cozy|wedding|custom)$/, async (ctx) => {
+  // Обробка вибору стилю (з підтримкою _next суфіксу для швидкої генерації)
+  bot.action(/^style_(bright|premium|cozy|wedding|custom)(_next)?$/, async (ctx) => {
     try {
       const style = ctx.match[1];
+      const isNext = ctx.match[2] === '_next';
       const session = getSession(ctx.from.id);
       
       if (!session || !session.originalPhotoUrl) {
@@ -39,10 +41,17 @@ export const registerCallbacks = (bot) => {
       setSession(ctx.from.id, session);
 
       if (style === 'custom') {
+        // Для кастомного стилю - показуємо локацію
         await ctx.editMessageText('Напиши додаткові побажання до стилю — що підкреслити, змінити чи додати.');
         await ctx.answerCbQuery();
+      } else if (isNext) {
+        // Швидка генерація - пропускаємо локацію, переходимо до типу контенту
+        await ctx.editMessageText('Обери тип контенту 👇', {
+          reply_markup: contentTypeSelectionKeyboard,
+        });
+        await ctx.answerCbQuery();
       } else {
-        // Показуємо вибір локації
+        // Стандартний флоу - показуємо вибір локації
         await ctx.editMessageText('Обери локацію/фон для фото 👇', {
           reply_markup: locationSelectionKeyboard,
         });
@@ -80,11 +89,12 @@ export const registerCallbacks = (bot) => {
     }
   });
 
-  // Обробка вибору типу контенту
+  // Обробка вибору типу контенту (з підтримкою _next суфіксу для відео)
   // За замовчуванням використовуємо KlingAI для відео (Veo залишається в коді для майбутнього використання)
-  bot.action(/^content_(photo|video|kling)$/, async (ctx) => {
+  bot.action(/^content_(photo|video|kling)(_next)?$/, async (ctx) => {
     try {
       const contentType = ctx.match[1];
+      const isNext = ctx.match[2] === '_next';
       const session = getSession(ctx.from.id);
       
       if (!session || !session.originalPhotoUrl) {
@@ -109,11 +119,25 @@ export const registerCallbacks = (bot) => {
           ctx.reply(`❌ Помилка генерації: ${error.message || 'Невідома помилка'}`).catch(console.error);
         });
       } else {
-        // Для відео - показуємо вибір анімації
-        await ctx.editMessageText('Обери тип анімації для відео 🎬\n\nЯка анімація тобі подобається?', {
-          reply_markup: animationSelectionKeyboard,
-        });
-        await ctx.answerCbQuery();
+        // Для відео - якщо _next, одразу генеруємо з дефолтною анімацією, інакше показуємо вибір анімації
+        if (isNext) {
+          // Швидка генерація відео з дефолтною анімацією
+          session.animation = 'none';
+          setSession(ctx.from.id, session);
+          await ctx.editMessageText('Чудово! Починаю генерувати відео 🎬\n\nЦе займе 2-5 хвилин ⏳');
+          await ctx.answerCbQuery('⏳ Генерую відео... Це займе 2-5 хвилин ⏳');
+          
+          processGeneration(ctx, session).catch((error) => {
+            console.error('[callbacks] Error in processGeneration:', error);
+            ctx.reply(`❌ Помилка генерації: ${error.message || 'Невідома помилка'}`).catch(console.error);
+          });
+        } else {
+          // Показуємо вибір анімації
+          await ctx.editMessageText('Обери тип анімації для відео 🎬\n\nЯка анімація тобі подобається?', {
+            reply_markup: animationSelectionKeyboard,
+          });
+          await ctx.answerCbQuery();
+        }
       }
     } catch (error) {
       console.error('Error handling content type selection:', error);
@@ -394,7 +418,18 @@ export const registerCallbacks = (bot) => {
     }
   });
 
-  // Генерація власного фото
+  // Старт генерації (основний обробник)
+  bot.action('start_generation', async (ctx) => {
+    try {
+      await ctx.editMessageText('Надішли фото десерту, який хочеш покращити 🍰✨');
+      await ctx.answerCbQuery();
+    } catch (error) {
+      console.error('Error handling start generation:', error);
+      await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
+    }
+  });
+
+  // Генерація власного фото (з каталогу)
   bot.action('generate_own', async (ctx) => {
     try {
       await ctx.editMessageText('Надішли фото десерту, який хочеш покращити 🍰✨');
@@ -405,7 +440,7 @@ export const registerCallbacks = (bot) => {
     }
   });
 
-  // Генерація фото (перевірка оплати)
+  // Генерація фото (з перевіркою оплати - застарілий, але залишаємо для зворотної сумісності)
   bot.action('generate_photo', async (ctx) => {
     try {
       const user = await db.getUserByTelegramId(ctx.from.id);
@@ -504,15 +539,124 @@ export const registerCallbacks = (bot) => {
     }
   });
 
-  bot.action('settings', async (ctx) => {
+  // Профіль/Баланс (замість settings)
+  bot.action('my_account_menu', async (ctx) => {
     try {
-      await ctx.editMessageText(getSettingsMessage(), {
-        parse_mode: 'HTML',
-        reply_markup: settingsKeyboard,
-      });
+      const user = await db.getUserByTelegramId(ctx.from.id);
+      const availableGenerations = await db.getAvailablePaidGenerations(ctx.from.id);
+      const freeGenerationsUsed = user?.free_generations_used || 0;
+      const canGenerateFree = freeGenerationsUsed < config.app.freeGenerations;
+      const totalAvailable = canGenerateFree ? (config.app.freeGenerations - freeGenerationsUsed) + availableGenerations : availableGenerations;
+      
+      await ctx.editMessageText(
+        `👤 <b>Мій профіль</b>\n\n` +
+        `💰 <b>Доступно генерацій:</b> ${totalAvailable}\n` +
+        `🎁 Безкоштовні: ${canGenerateFree ? config.app.freeGenerations - freeGenerationsUsed : 0}\n` +
+        `💳 Оплачені: ${availableGenerations}\n\n` +
+        `Обери опцію:`,
+        {
+          parse_mode: 'HTML',
+          reply_markup: myAccountMenuKeyboard(totalAvailable),
+        }
+      );
       await ctx.answerCbQuery();
     } catch (error) {
-      console.error('Error handling settings:', error);
+      console.error('Error handling my account menu:', error);
+      await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
+    }
+  });
+
+  // Показ балансу (детальна інформація)
+  bot.action('show_balance', async (ctx) => {
+    try {
+      const user = await db.getUserByTelegramId(ctx.from.id);
+      const availableGenerations = await db.getAvailablePaidGenerations(ctx.from.id);
+      const freeGenerationsUsed = user?.free_generations_used || 0;
+      const canGenerateFree = freeGenerationsUsed < config.app.freeGenerations;
+      const totalAvailable = canGenerateFree ? (config.app.freeGenerations - freeGenerationsUsed) + availableGenerations : availableGenerations;
+      
+      await ctx.answerCbQuery(
+        `💰 Доступно: ${totalAvailable} генерацій\n` +
+        `🎁 Безкоштовні: ${canGenerateFree ? config.app.freeGenerations - freeGenerationsUsed : 0}\n` +
+        `💳 Оплачені: ${availableGenerations}`,
+        { show_alert: false }
+      );
+    } catch (error) {
+      console.error('Error showing balance:', error);
+      await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
+    }
+  });
+
+  // Покупка генерацій
+  bot.action('buy_generations', async (ctx) => {
+    try {
+      const user = await db.getUserByTelegramId(ctx.from.id);
+      const availableGenerations = await db.getAvailablePaidGenerations(ctx.from.id);
+      const freeGenerationsUsed = user?.free_generations_used || 0;
+      const canGenerateFree = freeGenerationsUsed < config.app.freeGenerations;
+      
+      if (canGenerateFree || availableGenerations > 0) {
+        await ctx.answerCbQuery(
+          `У тебе ще є ${canGenerateFree ? config.app.freeGenerations - freeGenerationsUsed : 0} безкоштовних та ${availableGenerations} оплачених генерацій. Можеш спробувати їх спочатку!`,
+          { show_alert: true }
+        );
+        return;
+      }
+
+      // Створюємо платіж
+      try {
+        const payment = await paymentService.createPayment(ctx.from.id);
+        const userData = await db.createOrUpdateUser(ctx.from.id, {
+          username: ctx.from.username,
+          first_name: ctx.from.first_name,
+        });
+        await db.createPayment(userData.id, payment.amount * 100, config.payment.currency, payment.orderId);
+        
+        await ctx.editMessageText(
+          `💰 Для створення креативу потрібна оплата ${config.payment.amount} грн за 1 генерацію (2 варіанти зображень або 1 відео).\n\n` +
+          `Натисни кнопку нижче для оплати:`,
+          { reply_markup: createPaymentKeyboard(payment.checkoutUrl) }
+        );
+        await ctx.answerCbQuery();
+      } catch (paymentError) {
+        console.error('[buy_generations] Payment creation error:', paymentError);
+        await ctx.editMessageText(
+          `💰 Для створення креативу потрібна оплата ${config.payment.amount} грн за 1 генерацію (2 варіанти зображень).\n\n` +
+          `⚠️ Помилка створення платежу. Спробуй ще раз або звернись до підтримки.`,
+          { reply_markup: backKeyboard }
+        );
+        await ctx.answerCbQuery();
+      }
+    } catch (error) {
+      console.error('Error handling buy generations:', error);
+      await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
+    }
+  });
+
+  // Застарілий обробник settings (для зворотної сумісності - перенаправляємо на my_account_menu)
+  bot.action('settings', async (ctx) => {
+    // Викликаємо обробник my_account_menu напряму
+    const user = await db.getUserByTelegramId(ctx.from.id);
+    const availableGenerations = await db.getAvailablePaidGenerations(ctx.from.id);
+    const freeGenerationsUsed = user?.free_generations_used || 0;
+    const canGenerateFree = freeGenerationsUsed < config.app.freeGenerations;
+    const totalAvailable = canGenerateFree ? (config.app.freeGenerations - freeGenerationsUsed) + availableGenerations : availableGenerations;
+    
+    try {
+      await ctx.editMessageText(
+        `👤 <b>Мій профіль</b>\n\n` +
+        `💰 <b>Доступно генерацій:</b> ${totalAvailable}\n` +
+        `🎁 Безкоштовні: ${canGenerateFree ? config.app.freeGenerations - freeGenerationsUsed : 0}\n` +
+        `💳 Оплачені: ${availableGenerations}\n\n` +
+        `Обери опцію:`,
+        {
+          parse_mode: 'HTML',
+          reply_markup: myAccountMenuKeyboard(totalAvailable),
+        }
+      );
+      await ctx.answerCbQuery();
+    } catch (error) {
+      console.error('Error handling settings (redirect to my_account_menu):', error);
       await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
     }
   });

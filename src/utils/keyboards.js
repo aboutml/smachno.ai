@@ -5,24 +5,22 @@ import { Markup } from 'telegraf';
  */
 export const mainMenuKeyboard = {
   inline_keyboard: [
-    [{ text: '📸 Згенерувати креатив десерту', callback_data: 'generate_photo' }],
-    [{ text: '💡 Стилі / Пресети', callback_data: 'styles_menu' }],
-    [{ text: 'ℹ️ Про бота', callback_data: 'about' }, { text: '⚙️ Налаштування', callback_data: 'settings' }],
-    [{ text: '❓ Допомога', callback_data: 'help' }]
+    [{ text: '✨ Створити креатив', callback_data: 'start_generation' }],
+    [{ text: '🍰 Каталог ідей / Стилі', callback_data: 'styles_menu' }],
+    [{ text: '👤 Мій профіль / Баланс', callback_data: 'my_account_menu' }],
+    [{ text: 'ℹ️ Про бота', callback_data: 'about' }, { text: '❓ Допомога', callback_data: 'help' }]
   ],
 };
 
 /**
- * Клавіатура вибору стилю
+ * Клавіатура вибору стилю (оптимізована - 2 колонки)
  */
 export const styleSelectionKeyboard = {
   inline_keyboard: [
-    [{ text: '🍓 Яскравий та соковитий', callback_data: 'style_bright' }],
-    [{ text: '🧁 Преміум-кондитерська', callback_data: 'style_premium' }],
-    [{ text: '☕ Затишна кав\'ярня', callback_data: 'style_cozy' }],
-    [{ text: '🎂 Весільна естетика', callback_data: 'style_wedding' }],
-    [{ text: '➕ Додати свої побажання', callback_data: 'style_custom' }],
-    [{ text: '🔙 Назад', callback_data: 'back_to_menu' }]
+    [{ text: '🍓 Яскравий та соковитий', callback_data: 'style_bright_next' }, { text: '🧁 Преміум-кондитерська', callback_data: 'style_premium_next' }],
+    [{ text: '☕ Затишна кав\'ярня', callback_data: 'style_cozy_next' }, { text: '🎂 Весільна естетика', callback_data: 'style_wedding_next' }],
+    [{ text: '🛠️ Кастомні налаштування', callback_data: 'style_custom' }],
+    [{ text: '🔙 Скасувати', callback_data: 'back_to_menu' }]
   ],
 };
 
@@ -44,13 +42,13 @@ export const locationSelectionKeyboard = {
 };
 
 /**
- * Клавіатура вибору типу контенту (фото/відео)
+ * Клавіатура вибору типу контенту (фото/відео) - оптимізована
  */
 export const contentTypeSelectionKeyboard = {
   inline_keyboard: [
-    [{ text: '📸 Фото (2 варіанти)', callback_data: 'content_photo' }],
-    [{ text: '🎬 Відео (5 сек)', callback_data: 'content_kling' }],
-    [{ text: '🔙 Назад до локації', callback_data: 'back_to_location' }]
+    [{ text: '🖼️ 2 Фото-креативи (Базовий)', callback_data: 'content_photo' }],
+    [{ text: '🎬 5-сек Відео (Reels/TikTok)', callback_data: 'content_kling_next' }],
+    [{ text: '🔙 Змінити стиль', callback_data: 'back_to_styles' }]
   ],
 };
 
@@ -70,13 +68,13 @@ export const animationSelectionKeyboard = {
 };
 
 /**
- * Клавіатура після генерації
+ * Клавіатура після генерації (оптимізована)
  */
 export const postGenerationKeyboard = {
   inline_keyboard: [
-    [{ text: '🔄 Згенерувати ще раз (те саме фото)', callback_data: 'regenerate_same' }],
-    [{ text: '✨ Змінити стиль', callback_data: 'change_style' }],
-    [{ text: '🖼 Спробувати інше фото', callback_data: 'new_photo' }],
+    [{ text: '🔄 Повторити (інший стиль)', callback_data: 'regenerate_with_new_style' }],
+    [{ text: '⬆️ Завантажити нове фото', callback_data: 'new_photo' }],
+    [{ text: '💰 Отримати більше генерацій', callback_data: 'buy_generations' }],
     [{ text: '🏠 Головне меню', callback_data: 'back_to_menu' }]
   ],
 };
@@ -101,18 +99,15 @@ export const backKeyboard = {
 };
 
 /**
- * Клавіатура стилів/пресетів
+ * Клавіатура стилів/пресетів (оптимізована - кнопка генерації на початку)
  */
 export const stylesMenuKeyboard = {
   inline_keyboard: [
-    [{ text: '🍰 Торти', callback_data: 'style_cakes' }],
-    [{ text: '🧁 Капкейки', callback_data: 'style_cupcakes' }],
-    [{ text: '🍩 Пончики', callback_data: 'style_donuts' }],
-    [{ text: '☕ Напої', callback_data: 'style_drinks' }],
-    [{ text: '🍪 Печиво', callback_data: 'style_cookies' }],
-    [{ text: '🍮 Десерти', callback_data: 'style_desserts' }],
-    [{ text: '📸 Хочу згенерувати своє фото', callback_data: 'generate_own' }],
-    [{ text: '🔙 Назад', callback_data: 'back_to_menu' }]
+    [{ text: '📸 Хочу згенерувати своє фото', callback_data: 'start_generation' }],
+    [{ text: '🍰 Торти', callback_data: 'category_cakes' }, { text: '🧁 Капкейки', callback_data: 'category_cupcakes' }],
+    [{ text: '🍩 Пончики', callback_data: 'category_donuts' }, { text: '☕ Напої', callback_data: 'category_drinks' }],
+    [{ text: '🍪 Печиво', callback_data: 'category_cookies' }, { text: '🍮 Інші десерти', callback_data: 'category_desserts' }],
+    [{ text: '🔙 Головне меню', callback_data: 'back_to_menu' }]
   ],
 };
 
@@ -127,7 +122,8 @@ export const categoryKeyboard = {
 };
 
 /**
- * Клавіатура налаштувань
+ * Клавіатура налаштувань (застаріла - використовується myAccountMenuKeyboard)
+ * @deprecated Використовуйте myAccountMenuKeyboard
  */
 export const settingsKeyboard = {
   inline_keyboard: [
@@ -136,6 +132,22 @@ export const settingsKeyboard = {
     [{ text: '🧩 Мова інтерфейсу: Українська', callback_data: 'language' }],
     [{ text: '🏠 Головне меню', callback_data: 'back_to_menu' }]
   ],
+};
+
+/**
+ * Клавіатура профілю/балансу (оптимізована)
+ * @param {number} availableGenerations - Доступна кількість генерацій
+ */
+export const myAccountMenuKeyboard = (availableGenerations = 0) => {
+  return {
+    inline_keyboard: [
+      [{ text: `💰 Мій Баланс: ${availableGenerations} генерацій`, callback_data: 'show_balance' }],
+      [{ text: '💳 Поповнити баланс', callback_data: 'buy_generations' }],
+      [{ text: '🖼️ Мої креативи', callback_data: 'my_creatives' }],
+      [{ text: '📝 Зворотний зв\'язок', callback_data: 'feedback' }, { text: '🧩 Мова: Українська', callback_data: 'language' }],
+      [{ text: '🔙 Головне меню', callback_data: 'back_to_menu' }]
+    ],
+  };
 };
 
 /**
