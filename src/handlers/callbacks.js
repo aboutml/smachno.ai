@@ -504,11 +504,18 @@ export const registerCallbacks = (bot) => {
   // Про бота
   bot.action('about', async (ctx) => {
     try {
-      await ctx.editMessageText(getAboutMessage(), {
+      const { mainMenuReplyKeyboard } = await import('../utils/keyboards.js');
+      try {
+        await ctx.editMessageText(getAboutMessage(), {
+          parse_mode: 'HTML',
+          reply_markup: { remove_keyboard: true },
+        });
+      } catch (editError) {
+        // Якщо не вдалося відредагувати, просто відправляємо нове
+      }
+      await ctx.reply(getAboutMessage(), {
         parse_mode: 'HTML',
-        reply_markup: {
-          inline_keyboard: [[{ text: '🏠 Головне меню', callback_data: 'back_to_menu' }]],
-        },
+        reply_markup: mainMenuReplyKeyboard,
       });
       await ctx.answerCbQuery();
     } catch (error) {
@@ -667,16 +674,32 @@ export const registerCallbacks = (bot) => {
       const creatives = await db.getUserCreatives(ctx.from.id, 5);
       console.log(`[my_creatives] User ${ctx.from.id}, found ${creatives.length} creatives`);
 
+      const { mainMenuReplyKeyboard } = await import('../utils/keyboards.js');
+      
       if (creatives.length === 0) {
-        await ctx.editMessageText('📭 У тебе ще немає створених креативів.\n\nНадішли фото десерту, щоб створити перший креатив!', {
-          reply_markup: mainMenuKeyboard,
+        try {
+          await ctx.editMessageText('📭 У тебе ще немає створених креативів.\n\nНадішли фото десерту, щоб створити перший креатив!', {
+            reply_markup: { remove_keyboard: true },
+          });
+        } catch (editError) {
+          // Якщо не вдалося відредагувати, просто відправляємо нове
+        }
+        await ctx.reply('📭 У тебе ще немає створених креативів.\n\nНадішли фото десерту, щоб створити перший креатив!', {
+          reply_markup: mainMenuReplyKeyboard,
         });
         await ctx.answerCbQuery();
         return;
       }
 
-      await ctx.editMessageText(`📸 Твої останні креативи (${creatives.length}):`, {
-        reply_markup: mainMenuKeyboard,
+      try {
+        await ctx.editMessageText(`📸 Твої останні креативи (${creatives.length}):`, {
+          reply_markup: { remove_keyboard: true },
+        });
+      } catch (editError) {
+        // Якщо не вдалося відредагувати, просто відправляємо нове
+      }
+      await ctx.reply(`📸 Твої останні креативи (${creatives.length}):`, {
+        reply_markup: mainMenuReplyKeyboard,
       });
       await ctx.answerCbQuery();
 
@@ -738,9 +761,18 @@ export const registerCallbacks = (bot) => {
   // Допомога
   bot.action('help', async (ctx) => {
     try {
-      await ctx.editMessageText(getHelpMessage(), {
+      const { mainMenuReplyKeyboard } = await import('../utils/keyboards.js');
+      try {
+        await ctx.editMessageText(getHelpMessage(), {
+          parse_mode: 'HTML',
+          reply_markup: { remove_keyboard: true },
+        });
+      } catch (editError) {
+        // Якщо не вдалося відредагувати, просто відправляємо нове
+      }
+      await ctx.reply(getHelpMessage(), {
         parse_mode: 'HTML',
-        reply_markup: mainMenuKeyboard,
+        reply_markup: mainMenuReplyKeyboard,
       });
       await ctx.answerCbQuery();
     } catch (error) {
@@ -753,18 +785,20 @@ export const registerCallbacks = (bot) => {
   // Повернення в головне меню без привітання (для після генерації)
   bot.action('back_to_menu_simple', async (ctx) => {
     try {
+      const { mainMenuReplyKeyboard } = await import('../utils/keyboards.js');
       try {
         await ctx.editMessageText('Обери, що хочеш зробити:', {
           parse_mode: 'HTML',
-          reply_markup: mainMenuKeyboard,
+          reply_markup: { remove_keyboard: true },
         });
       } catch (editError) {
-        // Якщо не вдалося відредагувати (наприклад, це фото), відправляємо нове повідомлення
-        await ctx.reply('Обери, що хочеш зробити:', {
-          parse_mode: 'HTML',
-          reply_markup: mainMenuKeyboard,
-        });
+        // Якщо не вдалося відредагувати (наприклад, це фото), просто відправляємо нове повідомлення
       }
+      // Відправляємо нове повідомлення з Reply Keyboard
+      await ctx.reply('Обери, що хочеш зробити:', {
+        parse_mode: 'HTML',
+        reply_markup: mainMenuReplyKeyboard,
+      });
       await ctx.answerCbQuery();
     } catch (error) {
       console.error('Error handling back to menu simple:', error);
@@ -775,20 +809,24 @@ export const registerCallbacks = (bot) => {
   // Повернення в головне меню з привітанням (для інших випадків)
   bot.action('back_to_menu', async (ctx) => {
     try {
+      const { mainMenuReplyKeyboard } = await import('../utils/keyboards.js');
       const user = ctx.from;
       const welcomeMessage = getWelcomeMessage(user.first_name);
 
       try {
         await ctx.editMessageText(welcomeMessage, {
           parse_mode: 'Markdown',
-          reply_markup: mainMenuKeyboard,
+          reply_markup: { remove_keyboard: true },
         });
       } catch (editError) {
-        await ctx.reply(welcomeMessage, {
-          parse_mode: 'Markdown',
-          reply_markup: mainMenuKeyboard,
-        });
+        // Якщо не вдалося відредагувати, просто відправляємо нове повідомлення
       }
+      
+      // Відправляємо нове повідомлення з Reply Keyboard
+      await ctx.reply(welcomeMessage, {
+        parse_mode: 'Markdown',
+        reply_markup: mainMenuReplyKeyboard,
+      });
       
       await ctx.answerCbQuery();
     } catch (error) {

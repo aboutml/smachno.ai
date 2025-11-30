@@ -1,8 +1,8 @@
 import { config } from '../config.js';
 import { db } from '../db/database.js';
 import { getWelcomeMessage } from '../utils/messages.js';
-import { mainMenuKeyboard } from '../utils/keyboards.js';
-import { removeKeyboard, isAdmin } from '../utils/helpers.js';
+import { mainMenuReplyKeyboard } from '../utils/keyboards.js';
+import { isAdmin } from '../utils/helpers.js';
 
 /**
  * Реєстрація обробників команд
@@ -18,11 +18,9 @@ export const registerCommands = (bot) => {
       first_name: user.first_name || user.first_name,
     });
 
-    await removeKeyboard(ctx);
-
     await ctx.reply(getWelcomeMessage(user.first_name), {
       parse_mode: 'Markdown',
-      reply_markup: mainMenuKeyboard,
+      reply_markup: mainMenuReplyKeyboard,
     });
   });
 
