@@ -789,21 +789,23 @@ export const registerCallbacks = (bot) => {
   // Повернення в головне меню без привітання (для після генерації)
   bot.action('back_to_menu_simple', async (ctx) => {
     try {
-      const { mainMenuReplyKeyboard } = await import('../utils/keyboards.js');
-      try {
-        await ctx.editMessageText('Обери, що хочеш зробити:', {
-          parse_mode: 'HTML',
-          reply_markup: { remove_keyboard: true },
-        });
-      } catch (editError) {
-        // Якщо не вдалося відредагувати (наприклад, це фото), просто відправляємо нове повідомлення
-      }
-      // Відправляємо нове повідомлення з Reply Keyboard
       const { mainMenuReplyKeyboardMarkup } = await import('../utils/keyboards.js');
+      
+      // Намагаємося видалити повідомлення, на яке натиснули кнопку
+      if (ctx.callbackQuery?.message) {
+        try {
+          await ctx.deleteMessage().catch(() => {});
+        } catch (deleteError) {
+          // Ігноруємо помилки видалення
+        }
+      }
+      
+      // Відправляємо нове повідомлення з Reply Keyboard
       await ctx.reply('Обери, що хочеш зробити:', {
         parse_mode: 'HTML',
         reply_markup: mainMenuReplyKeyboardMarkup,
       });
+      
       await ctx.answerCbQuery();
     } catch (error) {
       console.error('Error handling back to menu simple:', error);
@@ -814,21 +816,20 @@ export const registerCallbacks = (bot) => {
   // Повернення в головне меню з привітанням (для інших випадків)
   bot.action('back_to_menu', async (ctx) => {
     try {
-      const { mainMenuReplyKeyboard } = await import('../utils/keyboards.js');
+      const { mainMenuReplyKeyboardMarkup } = await import('../utils/keyboards.js');
       const user = ctx.from;
       const welcomeMessage = getWelcomeMessage(user.first_name);
 
-      try {
-        await ctx.editMessageText(welcomeMessage, {
-          parse_mode: 'Markdown',
-          reply_markup: { remove_keyboard: true },
-        });
-      } catch (editError) {
-        // Якщо не вдалося відредагувати, просто відправляємо нове повідомлення
+      // Намагаємося видалити повідомлення, на яке натиснули кнопку
+      if (ctx.callbackQuery?.message) {
+        try {
+          await ctx.deleteMessage().catch(() => {});
+        } catch (deleteError) {
+          // Ігноруємо помилки видалення
+        }
       }
-      
+
       // Відправляємо нове повідомлення з Reply Keyboard
-      const { mainMenuReplyKeyboardMarkup } = await import('../utils/keyboards.js');
       await ctx.reply(welcomeMessage, {
         parse_mode: 'Markdown',
         reply_markup: mainMenuReplyKeyboardMarkup,
