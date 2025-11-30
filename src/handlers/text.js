@@ -1,5 +1,5 @@
 import { getSession, setSession, deleteSession } from '../utils/sessions.js';
-import { mainMenuReplyKeyboard, settingsKeyboard } from '../utils/keyboards.js';
+import { mainMenuReplyKeyboardMarkup, settingsKeyboard } from '../utils/keyboards.js';
 import { processGeneration } from './generation.js';
 import { db } from '../db/database.js';
 import { config } from '../config.js';
@@ -105,14 +105,14 @@ export const registerTextHandlers = (bot) => {
 
     // Якщо це не побажання для стилю, просимо надіслати фото
     await ctx.reply('📸 Для генерації потрібно надіслати фото десерту.\n\nНатисни кнопку меню знизу або надішли фото напряму.', {
-      reply_markup: mainMenuReplyKeyboard,
+      reply_markup: mainMenuReplyKeyboardMarkup,
     });
   });
 
   // Обробка натискань на кнопки Reply Keyboard
   bot.hears('✨ Створити креатив', async (ctx) => {
     await ctx.reply('Надішли фото десерту, який хочеш покращити 🍰✨', {
-      reply_markup: mainMenuReplyKeyboard,
+      reply_markup: mainMenuReplyKeyboardMarkup,
     });
   });
 
@@ -148,19 +148,17 @@ export const registerTextHandlers = (bot) => {
 
   bot.hears('ℹ️ Про бота', async (ctx) => {
     const { getAboutMessage } = await import('../utils/messages.js');
-    const { mainMenuReplyKeyboard } = await import('../utils/keyboards.js');
     await ctx.reply(getAboutMessage(), {
       parse_mode: 'HTML',
-      reply_markup: mainMenuReplyKeyboard,
+      reply_markup: mainMenuReplyKeyboardMarkup,
     });
   });
 
   bot.hears('❓ Допомога', async (ctx) => {
     const { getHelpMessage } = await import('../utils/messages.js');
-    const { mainMenuReplyKeyboard } = await import('../utils/keyboards.js');
     await ctx.reply(getHelpMessage(), {
       parse_mode: 'HTML',
-      reply_markup: mainMenuReplyKeyboard,
+      reply_markup: mainMenuReplyKeyboardMarkup,
     });
   });
 };

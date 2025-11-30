@@ -15,11 +15,14 @@ export const mainMenuKeyboard = {
 /**
  * Головне меню (Reply Keyboard - постійна клавіатура знизу)
  */
-export const mainMenuReplyKeyboard = Markup.keyboard([
+const mainMenuReplyKeyboardObj = Markup.keyboard([
   ['✨ Створити креатив'],
   ['🍰 Каталог ідей / Стилі', '👤 Мій профіль / Баланс'],
   ['ℹ️ Про бота', '❓ Допомога']
-]).resize(); // resize() робить кнопки компактнішими
+]).resize().persistent(); // resize() робить кнопки компактнішими, persistent() робить клавіатуру постійною
+
+// Експортуємо reply_markup для використання в ctx.reply()
+export const mainMenuReplyKeyboardMarkup = mainMenuReplyKeyboardObj.reply_markup;
 
 /**
  * Клавіатура вибору стилю (оптимізована - 2 колонки)

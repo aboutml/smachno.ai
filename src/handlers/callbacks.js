@@ -513,9 +513,10 @@ export const registerCallbacks = (bot) => {
       } catch (editError) {
         // Якщо не вдалося відредагувати, просто відправляємо нове
       }
+      const { mainMenuReplyKeyboardMarkup } = await import('../utils/keyboards.js');
       await ctx.reply(getAboutMessage(), {
         parse_mode: 'HTML',
-        reply_markup: mainMenuReplyKeyboard,
+        reply_markup: mainMenuReplyKeyboardMarkup,
       });
       await ctx.answerCbQuery();
     } catch (error) {
@@ -684,8 +685,9 @@ export const registerCallbacks = (bot) => {
         } catch (editError) {
           // Якщо не вдалося відредагувати, просто відправляємо нове
         }
+        const { mainMenuReplyKeyboardMarkup } = await import('../utils/keyboards.js');
         await ctx.reply('📭 У тебе ще немає створених креативів.\n\nНадішли фото десерту, щоб створити перший креатив!', {
-          reply_markup: mainMenuReplyKeyboard,
+          reply_markup: mainMenuReplyKeyboardMarkup,
         });
         await ctx.answerCbQuery();
         return;
@@ -698,8 +700,9 @@ export const registerCallbacks = (bot) => {
       } catch (editError) {
         // Якщо не вдалося відредагувати, просто відправляємо нове
       }
+      const { mainMenuReplyKeyboardMarkup } = await import('../utils/keyboards.js');
       await ctx.reply(`📸 Твої останні креативи (${creatives.length}):`, {
-        reply_markup: mainMenuReplyKeyboard,
+        reply_markup: mainMenuReplyKeyboardMarkup,
       });
       await ctx.answerCbQuery();
 
@@ -770,9 +773,10 @@ export const registerCallbacks = (bot) => {
       } catch (editError) {
         // Якщо не вдалося відредагувати, просто відправляємо нове
       }
+      const { mainMenuReplyKeyboardMarkup } = await import('../utils/keyboards.js');
       await ctx.reply(getHelpMessage(), {
         parse_mode: 'HTML',
-        reply_markup: mainMenuReplyKeyboard,
+        reply_markup: mainMenuReplyKeyboardMarkup,
       });
       await ctx.answerCbQuery();
     } catch (error) {
@@ -795,9 +799,10 @@ export const registerCallbacks = (bot) => {
         // Якщо не вдалося відредагувати (наприклад, це фото), просто відправляємо нове повідомлення
       }
       // Відправляємо нове повідомлення з Reply Keyboard
+      const { mainMenuReplyKeyboardMarkup } = await import('../utils/keyboards.js');
       await ctx.reply('Обери, що хочеш зробити:', {
         parse_mode: 'HTML',
-        reply_markup: mainMenuReplyKeyboard,
+        reply_markup: mainMenuReplyKeyboardMarkup,
       });
       await ctx.answerCbQuery();
     } catch (error) {
@@ -823,9 +828,10 @@ export const registerCallbacks = (bot) => {
       }
       
       // Відправляємо нове повідомлення з Reply Keyboard
+      const { mainMenuReplyKeyboardMarkup } = await import('../utils/keyboards.js');
       await ctx.reply(welcomeMessage, {
         parse_mode: 'Markdown',
-        reply_markup: mainMenuReplyKeyboard,
+        reply_markup: mainMenuReplyKeyboardMarkup,
       });
       
       await ctx.answerCbQuery();

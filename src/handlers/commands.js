@@ -1,7 +1,7 @@
 import { config } from '../config.js';
 import { db } from '../db/database.js';
 import { getWelcomeMessage } from '../utils/messages.js';
-import { mainMenuReplyKeyboard } from '../utils/keyboards.js';
+import { mainMenuReplyKeyboardMarkup } from '../utils/keyboards.js';
 import { isAdmin } from '../utils/helpers.js';
 
 /**
@@ -20,7 +20,7 @@ export const registerCommands = (bot) => {
 
     await ctx.reply(getWelcomeMessage(user.first_name), {
       parse_mode: 'Markdown',
-      reply_markup: mainMenuReplyKeyboard,
+      reply_markup: mainMenuReplyKeyboardMarkup,
     });
   });
 
