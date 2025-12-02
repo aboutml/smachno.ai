@@ -414,9 +414,6 @@ export const registerCallbacks = (bot) => {
             `Натисни кнопку нижче для оплати:`,
             createPaymentKeyboard(payment.checkoutUrl)
           );
-          await ctx.reply('Або повернись до головного меню:', {
-            reply_markup: mainMenuReplyKeyboardMarkup,
-          });
           await ctx.answerCbQuery();
           return;
         } catch (paymentError) {
@@ -426,9 +423,6 @@ export const registerCallbacks = (bot) => {
             `💰 Для створення креативу потрібна оплата ${config.payment.amount} грн за 1 генерацію (2 варіанти зображень).\n\n` +
             `⚠️ Помилка створення платежу. Спробуй ще раз або звернись до підтримки.`
           );
-          await ctx.reply('Повернись до головного меню:', {
-            reply_markup: mainMenuReplyKeyboardMarkup,
-          });
           await ctx.answerCbQuery();
           return;
         }

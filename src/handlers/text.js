@@ -76,9 +76,6 @@ export const registerTextHandlers = (bot) => {
           `Натисни кнопку нижче для оплати:`,
           createPaymentKeyboard(payment.checkoutUrl)
         );
-        await ctx.reply('Або повернись до головного меню:', {
-          reply_markup: mainMenuReplyKeyboardMarkup,
-        });
         return;
       } catch (paymentError) {
         console.error('[start_generation] Payment creation error:', paymentError);

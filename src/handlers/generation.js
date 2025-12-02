@@ -44,11 +44,6 @@ export async function processGeneration(ctx, session) {
             `Натисни кнопку нижче для оплати:`,
             createPaymentKeyboard(payment.checkoutUrl)
           );
-          // Додаємо Reply Keyboard окремим повідомленням
-          const { mainMenuReplyKeyboardMarkup } = await import('../utils/keyboards.js');
-          await ctx.reply('Або повернись до головного меню:', {
-            reply_markup: mainMenuReplyKeyboardMarkup,
-          });
           return;
         } catch (paymentError) {
           console.error('[generation] Payment creation error:', paymentError);
