@@ -1,7 +1,6 @@
 import { storageService } from '../services/storage.js';
 import { setSession } from '../utils/sessions.js';
-import { styleSelectionKeyboard } from '../utils/keyboards.js';
-import { removeKeyboard } from '../utils/helpers.js';
+import { styleSelectionReplyKeyboardMarkup } from '../utils/keyboards.js';
 import { config } from '../config.js';
 
 /**
@@ -28,11 +27,9 @@ export const registerPhotoHandlers = (bot) => {
         customWishes: null,
       });
 
-      await removeKeyboard(ctx);
-
-      // Показуємо вибір стилю з inline кнопками
+      // Показуємо вибір стилю з Reply Keyboard
       await ctx.reply('Обери стиль для покращеного фото 👇', {
-        reply_markup: styleSelectionKeyboard,
+        reply_markup: styleSelectionReplyKeyboardMarkup,
       });
     } catch (error) {
       console.error('Error processing photo:', error);

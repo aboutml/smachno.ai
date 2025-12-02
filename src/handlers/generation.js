@@ -45,6 +45,11 @@ export async function processGeneration(ctx, session) {
             `Натисни кнопку нижче для оплати:`,
             createPaymentKeyboard(payment.checkoutUrl)
           );
+          // Додаємо Reply Keyboard окремим повідомленням
+          const { mainMenuReplyKeyboardMarkup } = await import('../utils/keyboards.js');
+          await ctx.reply('Або повернись до головного меню:', {
+            reply_markup: mainMenuReplyKeyboardMarkup,
+          });
           return;
         } catch (paymentError) {
           console.error('[generation] Payment creation error:', paymentError);
@@ -280,8 +285,9 @@ export async function processGeneration(ctx, session) {
       ? `${statusMessage}\n\nЩо хочеш зробити далі?`
       : 'Що хочеш зробити далі?';
     
+    const { postGenerationReplyKeyboardMarkup } = await import('../utils/keyboards.js');
     await ctx.reply(messageText, {
-      reply_markup: postGenerationKeyboard,
+      reply_markup: postGenerationReplyKeyboardMarkup,
     });
 
     // Видаляємо флаг генерації та очищаємо сесію після успішної генерації

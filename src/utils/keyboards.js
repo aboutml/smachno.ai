@@ -25,76 +25,67 @@ const mainMenuReplyKeyboardObj = Markup.keyboard([
 export const mainMenuReplyKeyboardMarkup = mainMenuReplyKeyboardObj.reply_markup;
 
 /**
- * Клавіатура вибору стилю (оптимізована - 2 колонки)
+ * Клавіатура вибору стилю (Reply Keyboard)
  */
-export const styleSelectionKeyboard = {
-  inline_keyboard: [
-    [{ text: '🍓 Яскравий та соковитий', callback_data: 'style_bright_next' }, { text: '🧁 Преміум-кондитерська', callback_data: 'style_premium_next' }],
-    [{ text: '☕ Затишна кав\'ярня', callback_data: 'style_cozy_next' }, { text: '🎂 Весільна естетика', callback_data: 'style_wedding_next' }],
-    [{ text: '🛠️ Кастомні налаштування', callback_data: 'style_custom' }],
-    [{ text: '🔙 Скасувати', callback_data: 'back_to_menu' }]
-  ],
-};
+export const styleSelectionReplyKeyboard = Markup.keyboard([
+  ['🍓 Яскравий та соковитий', '🧁 Преміум-кондитерська'],
+  ['☕ Затишна кав\'ярня', '🎂 Весільна естетика'],
+  ['🛠️ Кастомні налаштування'],
+  ['🔙 Скасувати']
+]).resize().oneTime();
+
+export const styleSelectionReplyKeyboardMarkup = styleSelectionReplyKeyboard.reply_markup;
 
 /**
- * Клавіатура вибору локації/фону
+ * Клавіатура вибору локації/фону (Reply Keyboard)
  */
-export const locationSelectionKeyboard = {
-  inline_keyboard: [
-    [{ text: '🏠 Домашня кухня', callback_data: 'location_home' }],
-    [{ text: '☕ Кав\'ярня', callback_data: 'location_cafe' }],
-    [{ text: '🍽️ Ресторан', callback_data: 'location_restaurant' }],
-    [{ text: '🏪 Вітрина магазину', callback_data: 'location_shop' }],
-    [{ text: '📸 Студія', callback_data: 'location_studio' }],
-    [{ text: '🌳 Природа/Вулиця', callback_data: 'location_outdoor' }],
-    [{ text: '🎂 Святковий стіл', callback_data: 'location_celebration' }],
-    [{ text: '➖ Без локації', callback_data: 'location_none' }],
-    [{ text: '🔙 Назад до стилів', callback_data: 'back_to_styles' }]
-  ],
-};
+export const locationSelectionReplyKeyboard = Markup.keyboard([
+  ['🏠 Домашня кухня', '☕ Кав\'ярня'],
+  ['🍽️ Ресторан', '🏪 Вітрина магазину'],
+  ['📸 Студія', '🌳 Природа/Вулиця'],
+  ['🎂 Святковий стіл', '➖ Без локації'],
+  ['🔙 Назад до стилів']
+]).resize().oneTime();
+
+export const locationSelectionReplyKeyboardMarkup = locationSelectionReplyKeyboard.reply_markup;
 
 /**
- * Клавіатура вибору типу контенту (фото/відео) - оптимізована
+ * Клавіатура вибору типу контенту (фото/відео) - Reply Keyboard
  */
-export const contentTypeSelectionKeyboard = {
-  inline_keyboard: [
-    [{ text: '🖼️ 2 Фото-креативи (Базовий)', callback_data: 'content_photo' }],
-    [{ text: '🎬 5-сек Відео (Reels/TikTok)', callback_data: 'content_kling_next' }],
-    [{ text: '🔙 Змінити стиль', callback_data: 'back_to_styles' }]
-  ],
-};
+export const contentTypeSelectionReplyKeyboard = Markup.keyboard([
+  ['🖼️ 2 Фото-креативи', '🎬 5-сек Відео'],
+  ['🔙 Змінити стиль']
+]).resize().oneTime();
+
+export const contentTypeSelectionReplyKeyboardMarkup = contentTypeSelectionReplyKeyboard.reply_markup;
 
 /**
- * Клавіатура вибору анімації для відео
+ * Клавіатура вибору анімації для відео (Reply Keyboard)
  */
-export const animationSelectionKeyboard = {
-  inline_keyboard: [
-    [{ text: '🔄 Обертання 360°', callback_data: 'animation_rotate' }],
-    [{ text: '🔍 Zoom In (наближення)', callback_data: 'animation_zoom_in' }],
-    [{ text: '🔎 Zoom Out (віддалення)', callback_data: 'animation_zoom_out' }],
-    [{ text: '↔️ Pan (рух вліво-вправо)', callback_data: 'animation_pan' }],
-    [{ text: '↕️ Tilt (рух вгору-вниз)', callback_data: 'animation_tilt' }],
-    [{ text: '✨ Без анімації', callback_data: 'animation_none' }],
-    [{ text: '🔙 Назад', callback_data: 'back_to_content_type' }]
-  ],
-};
+export const animationSelectionReplyKeyboard = Markup.keyboard([
+  ['🔄 Обертання 360°', '🔍 Zoom In'],
+  ['🔎 Zoom Out', '↔️ Pan'],
+  ['↕️ Tilt', '✨ Без анімації'],
+  ['🔙 Назад']
+]).resize().oneTime();
+
+export const animationSelectionReplyKeyboardMarkup = animationSelectionReplyKeyboard.reply_markup;
 
 /**
- * Клавіатура після генерації (спрощена - тільки головне меню)
+ * Клавіатура після генерації (Reply Keyboard - тільки головне меню)
  */
-export const postGenerationKeyboard = {
-  inline_keyboard: [
-    [{ text: '🏠 Головне меню', callback_data: 'back_to_menu_simple' }]
-  ],
-};
+export const postGenerationReplyKeyboard = Markup.keyboard([
+  ['🏠 Головне меню']
+]).resize().oneTime();
+
+export const postGenerationReplyKeyboardMarkup = postGenerationReplyKeyboard.reply_markup;
 
 /**
- * Клавіатура для оплати
+ * Клавіатура для оплати (inline кнопка для URL + Reply Keyboard для головного меню)
  */
 export const createPaymentKeyboard = (checkoutUrl) => {
   return Markup.inlineKeyboard([
-    [Markup.button.url('💳 Оплатити', checkoutUrl)],
-    [Markup.button.callback('🏠 Головне меню', 'back_to_menu')]
+    [Markup.button.url('💳 Оплатити', checkoutUrl)]
   ]);
 };
 

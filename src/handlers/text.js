@@ -14,7 +14,38 @@ export const registerTextHandlers = (bot) => {
     '🍰 Каталог ідей / Стилі',
     '👤 Мій профіль / Баланс',
     'ℹ️ Про бота',
-    '❓ Допомога'
+    '❓ Допомога',
+    // Стилі
+    '🍓 Яскравий та соковитий',
+    '🧁 Преміум-кондитерська',
+    '☕ Затишна кав\'ярня',
+    '🎂 Весільна естетика',
+    '🛠️ Кастомні налаштування',
+    '🔙 Скасувати',
+    // Локації
+    '🏠 Домашня кухня',
+    '☕ Кав\'ярня',
+    '🍽️ Ресторан',
+    '🏪 Вітрина магазину',
+    '📸 Студія',
+    '🌳 Природа/Вулиця',
+    '🎂 Святковий стіл',
+    '➖ Без локації',
+    '🔙 Назад до стилів',
+    // Тип контенту
+    '🖼️ 2 Фото-креативи',
+    '🎬 5-сек Відео',
+    '🔙 Змінити стиль',
+    // Анімації
+    '🔄 Обертання 360°',
+    '🔍 Zoom In',
+    '🔎 Zoom Out',
+    '↔️ Pan',
+    '↕️ Tilt',
+    '✨ Без анімації',
+    '🔙 Назад',
+    // Після генерації
+    '🏠 Головне меню'
   ];
 
   // ВАЖЛИВО: bot.hears() має бути реєстрований ПЕРЕД bot.on('text')
@@ -28,16 +59,13 @@ export const registerTextHandlers = (bot) => {
   });
 
   bot.hears('🍰 Каталог ідей / Стилі', async (ctx) => {
-    const { stylesMenuKeyboard } = await import('../utils/keyboards.js');
-    await ctx.reply('🍰 <b>Каталог ідей / Стилі</b>\n\nОбери категорію для натхнення:', {
+    await ctx.reply('🍰 <b>Каталог ідей / Стилі</b>\n\nДля перегляду каталогу надішли фото десерту та обери стиль для генерації.', {
       parse_mode: 'HTML',
-      reply_markup: stylesMenuKeyboard,
+      reply_markup: mainMenuReplyKeyboardMarkup,
     });
   });
 
   bot.hears('👤 Мій профіль / Баланс', async (ctx) => {
-    // Викликаємо обробник my_account_menu
-    const { myAccountMenuKeyboard } = await import('../utils/keyboards.js');
     const user = await db.getUserByTelegramId(ctx.from.id);
     const availableGenerations = await db.getAvailablePaidGenerations(ctx.from.id);
     const freeGenerationsUsed = user?.free_generations_used || 0;
@@ -49,10 +77,10 @@ export const registerTextHandlers = (bot) => {
       `💰 <b>Доступно генерацій:</b> ${totalAvailable}\n` +
       `🎁 Безкоштовні: ${canGenerateFree ? config.app.freeGenerations - freeGenerationsUsed : 0}\n` +
       `💳 Оплачені: ${availableGenerations}\n\n` +
-      `Обери опцію:`,
+      `Для поповнення балансу надішли фото та спробуй згенерувати креатив. Якщо безкоштовні генерації закінчились, з'явиться кнопка оплати.`,
       {
         parse_mode: 'HTML',
-        reply_markup: myAccountMenuKeyboard(totalAvailable),
+        reply_markup: mainMenuReplyKeyboardMarkup,
       }
     );
   });
@@ -69,6 +97,241 @@ export const registerTextHandlers = (bot) => {
     const { getHelpMessage } = await import('../utils/messages.js');
     await ctx.reply(getHelpMessage(), {
       parse_mode: 'HTML',
+      reply_markup: mainMenuReplyKeyboardMarkup,
+    });
+  });
+
+  // Обробка вибору стилю (Reply Keyboard)
+  bot.hears('🍓 Яскравий та соковитий', async (ctx) => {
+    const session = getSession(ctx.from.id);
+    if (!session || !session.originalPhotoUrl) {
+      await ctx.reply('📸 Спочатку надішли фото десерту.', {
+        reply_markup: mainMenuReplyKeyboardMarkup,
+      });
+      return;
+    }
+    session.style = 'bright';
+    setSession(ctx.from.id, session);
+    
+    const { locationSelectionReplyKeyboardMarkup } = await import('../utils/keyboards.js');
+    await ctx.reply('Обери локацію/фон для фото 👇', {
+      reply_markup: locationSelectionReplyKeyboardMarkup,
+    });
+  });
+
+  bot.hears('🧁 Преміум-кондитерська', async (ctx) => {
+    const session = getSession(ctx.from.id);
+    if (!session || !session.originalPhotoUrl) {
+      await ctx.reply('📸 Спочатку надішли фото десерту.', {
+        reply_markup: mainMenuReplyKeyboardMarkup,
+      });
+      return;
+    }
+    session.style = 'premium';
+    setSession(ctx.from.id, session);
+    
+    const { locationSelectionReplyKeyboardMarkup } = await import('../utils/keyboards.js');
+    await ctx.reply('Обери локацію/фон для фото 👇', {
+      reply_markup: locationSelectionReplyKeyboardMarkup,
+    });
+  });
+
+  bot.hears('☕ Затишна кав\'ярня', async (ctx) => {
+    const session = getSession(ctx.from.id);
+    if (!session || !session.originalPhotoUrl) {
+      await ctx.reply('📸 Спочатку надішли фото десерту.', {
+        reply_markup: mainMenuReplyKeyboardMarkup,
+      });
+      return;
+    }
+    session.style = 'cozy';
+    setSession(ctx.from.id, session);
+    
+    const { locationSelectionReplyKeyboardMarkup } = await import('../utils/keyboards.js');
+    await ctx.reply('Обери локацію/фон для фото 👇', {
+      reply_markup: locationSelectionReplyKeyboardMarkup,
+    });
+  });
+
+  bot.hears('🎂 Весільна естетика', async (ctx) => {
+    const session = getSession(ctx.from.id);
+    if (!session || !session.originalPhotoUrl) {
+      await ctx.reply('📸 Спочатку надішли фото десерту.', {
+        reply_markup: mainMenuReplyKeyboardMarkup,
+      });
+      return;
+    }
+    session.style = 'wedding';
+    setSession(ctx.from.id, session);
+    
+    const { locationSelectionReplyKeyboardMarkup } = await import('../utils/keyboards.js');
+    await ctx.reply('Обери локацію/фон для фото 👇', {
+      reply_markup: locationSelectionReplyKeyboardMarkup,
+    });
+  });
+
+  bot.hears('🛠️ Кастомні налаштування', async (ctx) => {
+    const session = getSession(ctx.from.id);
+    if (!session || !session.originalPhotoUrl) {
+      await ctx.reply('📸 Спочатку надішли фото десерту.', {
+        reply_markup: mainMenuReplyKeyboardMarkup,
+      });
+      return;
+    }
+    session.style = 'custom';
+    setSession(ctx.from.id, session);
+    
+    await ctx.reply('Опиши свої побажання до стилю (наприклад: "пастельні кольори, мінімалістичний стиль, світлий фон") 👇', {
+      reply_markup: { remove_keyboard: true },
+    });
+  });
+
+  bot.hears('🔙 Скасувати', async (ctx) => {
+    deleteSession(ctx.from.id);
+    await ctx.reply('Скасовано. Обери, що хочеш зробити:', {
+      reply_markup: mainMenuReplyKeyboardMarkup,
+    });
+  });
+
+  // Обробка вибору локації (Reply Keyboard)
+  const locationMap = {
+    '🏠 Домашня кухня': 'home',
+    '☕ Кав\'ярня': 'cafe',
+    '🍽️ Ресторан': 'restaurant',
+    '🏪 Вітрина магазину': 'shop',
+    '📸 Студія': 'studio',
+    '🌳 Природа/Вулиця': 'outdoor',
+    '🎂 Святковий стіл': 'celebration',
+    '➖ Без локації': 'none',
+  };
+
+  for (const [buttonText, locationValue] of Object.entries(locationMap)) {
+    bot.hears(buttonText, async (ctx) => {
+      const session = getSession(ctx.from.id);
+      if (!session || !session.originalPhotoUrl) {
+        await ctx.reply('📸 Спочатку надішли фото десерту.', {
+          reply_markup: mainMenuReplyKeyboardMarkup,
+        });
+        return;
+      }
+      session.location = locationValue;
+      setSession(ctx.from.id, session);
+      
+      const { contentTypeSelectionReplyKeyboardMarkup } = await import('../utils/keyboards.js');
+      await ctx.reply('Обери тип контенту 👇', {
+        reply_markup: contentTypeSelectionReplyKeyboardMarkup,
+      });
+    });
+  }
+
+  bot.hears('🔙 Назад до стилів', async (ctx) => {
+    const session = getSession(ctx.from.id);
+    if (session) {
+      session.location = null;
+      setSession(ctx.from.id, session);
+    }
+    
+    const { styleSelectionReplyKeyboardMarkup } = await import('../utils/keyboards.js');
+    await ctx.reply('Обери стиль для покращеного фото 👇', {
+      reply_markup: styleSelectionReplyKeyboardMarkup,
+    });
+  });
+
+  // Обробка вибору типу контенту (Reply Keyboard)
+  bot.hears('🖼️ 2 Фото-креативи', async (ctx) => {
+    const session = getSession(ctx.from.id);
+    if (!session || !session.originalPhotoUrl) {
+      await ctx.reply('📸 Спочатку надішли фото десерту.', {
+        reply_markup: mainMenuReplyKeyboardMarkup,
+      });
+      return;
+    }
+    session.contentType = 'image';
+    setSession(ctx.from.id, session);
+    
+    await ctx.reply('Чудово! Починаю генерувати 😋\n\nЦе займе близько 1 хвилини.', {
+      reply_markup: { remove_keyboard: true },
+    });
+    await processGeneration(ctx, session);
+  });
+
+  bot.hears('🎬 5-сек Відео', async (ctx) => {
+    const session = getSession(ctx.from.id);
+    if (!session || !session.originalPhotoUrl) {
+      await ctx.reply('📸 Спочатку надішли фото десерту.', {
+        reply_markup: mainMenuReplyKeyboardMarkup,
+      });
+      return;
+    }
+    session.contentType = 'kling';
+    setSession(ctx.from.id, session);
+    
+    const { animationSelectionReplyKeyboardMarkup } = await import('../utils/keyboards.js');
+    await ctx.reply('Обери анімацію для відео 👇', {
+      reply_markup: animationSelectionReplyKeyboardMarkup,
+    });
+  });
+
+  bot.hears('🔙 Змінити стиль', async (ctx) => {
+    const session = getSession(ctx.from.id);
+    if (session) {
+      session.contentType = null;
+      session.location = null;
+      setSession(ctx.from.id, session);
+    }
+    
+    const { styleSelectionReplyKeyboardMarkup } = await import('../utils/keyboards.js');
+    await ctx.reply('Обери стиль для покращеного фото 👇', {
+      reply_markup: styleSelectionReplyKeyboardMarkup,
+    });
+  });
+
+  // Обробка вибору анімації (Reply Keyboard)
+  const animationMap = {
+    '🔄 Обертання 360°': 'rotate',
+    '🔍 Zoom In': 'zoom_in',
+    '🔎 Zoom Out': 'zoom_out',
+    '↔️ Pan': 'pan',
+    '↕️ Tilt': 'tilt',
+    '✨ Без анімації': 'none',
+  };
+
+  for (const [buttonText, animationValue] of Object.entries(animationMap)) {
+    bot.hears(buttonText, async (ctx) => {
+      const session = getSession(ctx.from.id);
+      if (!session || !session.originalPhotoUrl) {
+        await ctx.reply('📸 Спочатку надішли фото десерту.', {
+          reply_markup: mainMenuReplyKeyboardMarkup,
+        });
+        return;
+      }
+      session.animation = animationValue;
+      setSession(ctx.from.id, session);
+      
+      await ctx.reply('Чудово! Починаю генерувати відео 😋\n\nЦе займе до 5 хвилин.', {
+        reply_markup: { remove_keyboard: true },
+      });
+      await processGeneration(ctx, session);
+    });
+  }
+
+  bot.hears('🔙 Назад', async (ctx) => {
+    const session = getSession(ctx.from.id);
+    if (session) {
+      session.animation = null;
+      setSession(ctx.from.id, session);
+    }
+    
+    const { contentTypeSelectionReplyKeyboardMarkup } = await import('../utils/keyboards.js');
+    await ctx.reply('Обери тип контенту 👇', {
+      reply_markup: contentTypeSelectionReplyKeyboardMarkup,
+    });
+  });
+
+  // Обробка кнопки "Головне меню" після генерації
+  bot.hears('🏠 Головне меню', async (ctx) => {
+    deleteSession(ctx.from.id);
+    await ctx.reply('Обери, що хочеш зробити:', {
       reply_markup: mainMenuReplyKeyboardMarkup,
     });
   });
