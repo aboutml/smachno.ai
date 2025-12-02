@@ -4,17 +4,6 @@ import { db } from '../db/database.js';
 import { paymentService } from '../services/payment.js';
 import { getSession, setSession, deleteSession, getOrCreateSessionWithLastPhoto } from '../utils/sessions.js';
 import { 
-  mainMenuKeyboard, 
-  styleSelectionKeyboard,
-  locationSelectionKeyboard,
-  contentTypeSelectionKeyboard,
-  animationSelectionKeyboard,
-  stylesMenuKeyboard, 
-  categoryKeyboard,
-  settingsKeyboard,
-  myAccountMenuKeyboard,
-  creativeKeyboard,
-  backKeyboard,
   createPaymentKeyboard
 } from '../utils/keyboards.js';
 import { getWelcomeMessage, getAboutMessage, getHelpMessage, getSettingsMessage } from '../utils/messages.js';
@@ -46,14 +35,16 @@ export const registerCallbacks = (bot) => {
         await ctx.answerCbQuery();
       } else if (isNext) {
         // Швидка генерація - пропускаємо локацію, переходимо до типу контенту
-        await ctx.editMessageText('Обери тип контенту 👇', {
-          reply_markup: contentTypeSelectionKeyboard,
+        const { contentTypeSelectionReplyKeyboardMarkup } = await import('../utils/keyboards.js');
+        await ctx.reply('Обери тип контенту 👇', {
+          reply_markup: contentTypeSelectionReplyKeyboardMarkup,
         });
         await ctx.answerCbQuery();
       } else {
         // Стандартний флоу - показуємо вибір локації
-        await ctx.editMessageText('Обери локацію/фон для фото 👇', {
-          reply_markup: locationSelectionKeyboard,
+        const { locationSelectionReplyKeyboardMarkup } = await import('../utils/keyboards.js');
+        await ctx.reply('Обери локацію/фон для фото 👇', {
+          reply_markup: locationSelectionReplyKeyboardMarkup,
         });
         await ctx.answerCbQuery();
       }
@@ -79,8 +70,9 @@ export const registerCallbacks = (bot) => {
       setSession(ctx.from.id, session);
 
       // Показуємо вибір типу контенту (фото/відео)
-      await ctx.editMessageText('Обери тип контенту 👇', {
-        reply_markup: contentTypeSelectionKeyboard,
+      const { contentTypeSelectionReplyKeyboardMarkup } = await import('../utils/keyboards.js');
+      await ctx.reply('Обери тип контенту 👇', {
+        reply_markup: contentTypeSelectionReplyKeyboardMarkup,
       });
       await ctx.answerCbQuery();
     } catch (error) {
@@ -133,8 +125,9 @@ export const registerCallbacks = (bot) => {
           });
         } else {
           // Показуємо вибір анімації
-          await ctx.editMessageText('Обери тип анімації для відео 🎬\n\nЯка анімація тобі подобається?', {
-            reply_markup: animationSelectionKeyboard,
+          const { animationSelectionReplyKeyboardMarkup } = await import('../utils/keyboards.js');
+          await ctx.reply('Обери тип анімації для відео 🎬\n\nЯка анімація тобі подобається?', {
+            reply_markup: animationSelectionReplyKeyboardMarkup,
           });
           await ctx.answerCbQuery();
         }
@@ -200,8 +193,9 @@ export const registerCallbacks = (bot) => {
       delete session.contentType;
       setSession(ctx.from.id, session);
 
-      await ctx.editMessageText('Обери тип контенту 👇', {
-        reply_markup: contentTypeSelectionKeyboard,
+      const { contentTypeSelectionReplyKeyboardMarkup } = await import('../utils/keyboards.js');
+      await ctx.reply('Обери тип контенту 👇', {
+        reply_markup: contentTypeSelectionReplyKeyboardMarkup,
       });
       await ctx.answerCbQuery();
     } catch (error) {
@@ -224,8 +218,9 @@ export const registerCallbacks = (bot) => {
       delete session.contentType;
       setSession(ctx.from.id, session);
 
-      await ctx.editMessageText('Обери локацію/фон для фото 👇', {
-        reply_markup: locationSelectionKeyboard,
+      const { locationSelectionReplyKeyboardMarkup } = await import('../utils/keyboards.js');
+      await ctx.reply('Обери локацію/фон для фото 👇', {
+        reply_markup: locationSelectionReplyKeyboardMarkup,
       });
       await ctx.answerCbQuery();
     } catch (error) {
@@ -248,8 +243,9 @@ export const registerCallbacks = (bot) => {
       delete session.location;
       setSession(ctx.from.id, session);
 
-      await ctx.editMessageText('Обери стиль для покращеного фото 👇', {
-        reply_markup: styleSelectionKeyboard,
+      const { styleSelectionReplyKeyboardMarkup } = await import('../utils/keyboards.js');
+      await ctx.reply('Обери стиль для покращеного фото 👇', {
+        reply_markup: styleSelectionReplyKeyboardMarkup,
       });
       await ctx.answerCbQuery();
     } catch (error) {
@@ -288,8 +284,7 @@ export const registerCallbacks = (bot) => {
           console.error('[regenerate_same] Payment creation error:', paymentError);
           await ctx.editMessageText(
             `💰 Для створення креативу потрібна оплата ${config.payment.amount} грн за 1 генерацію (2 варіанти зображень).\n\n` +
-            `⚠️ Помилка створення платежу. Спробуй ще раз або звернись до підтримки.`,
-            { reply_markup: backKeyboard }
+            `⚠️ Помилка створення платежу. Спробуй ще раз або звернись до підтримки.`
           );
           await ctx.answerCbQuery();
           return;
@@ -309,8 +304,9 @@ export const registerCallbacks = (bot) => {
       session.customWishes = null;
       setSession(ctx.from.id, session);
       
-      await ctx.editMessageText('Обери стиль для покращеного фото 👇', {
-        reply_markup: styleSelectionKeyboard,
+      const { styleSelectionReplyKeyboardMarkup } = await import('../utils/keyboards.js');
+      await ctx.reply('Обери стиль для покращеного фото 👇', {
+        reply_markup: styleSelectionReplyKeyboardMarkup,
       });
       await ctx.answerCbQuery();
     } catch (error) {
@@ -349,8 +345,7 @@ export const registerCallbacks = (bot) => {
           console.error('[change_style] Payment creation error:', paymentError);
           await ctx.editMessageText(
             `💰 Для створення креативу потрібна оплата ${config.payment.amount} грн за 1 генерацію (2 варіанти зображень).\n\n` +
-            `⚠️ Помилка створення платежу. Спробуй ще раз або звернись до підтримки.`,
-            { reply_markup: backKeyboard }
+            `⚠️ Помилка створення платежу. Спробуй ще раз або звернись до підтримки.`
           );
           await ctx.answerCbQuery();
           return;
@@ -370,8 +365,9 @@ export const registerCallbacks = (bot) => {
       session.customWishes = null;
       setSession(ctx.from.id, session);
       
-      await ctx.editMessageText('Обери стиль для покращеного фото 👇', {
-        reply_markup: styleSelectionKeyboard,
+      const { styleSelectionReplyKeyboardMarkup } = await import('../utils/keyboards.js');
+      await ctx.reply('Обери стиль для покращеного фото 👇', {
+        reply_markup: styleSelectionReplyKeyboardMarkup,
       });
       await ctx.answerCbQuery();
     } catch (error) {
@@ -408,9 +404,12 @@ export const registerCallbacks = (bot) => {
       await ctx.editMessageText(
         `🍰 Приклади ${categoryNames[category]} для натхнення:\n\n` +
         `(Тут будуть показані приклади AI-фото)\n\n` +
-        `Це лише для натхнення. Для генерації своїх фото натисни кнопку нижче 👇`,
-        { reply_markup: categoryKeyboard }
+        `Це лише для натхнення. Для генерації своїх фото надішли фото десерту та обери стиль.`
       );
+      const { mainMenuReplyKeyboardMarkup } = await import('../utils/keyboards.js');
+      await ctx.reply('Обери опцію:', {
+        reply_markup: mainMenuReplyKeyboardMarkup,
+      });
       await ctx.answerCbQuery();
     } catch (error) {
       console.error('Error handling style category:', error);
@@ -470,16 +469,16 @@ export const registerCallbacks = (bot) => {
           console.error('[generate_photo] Payment creation error:', paymentError);
           await ctx.editMessageText(
             `💰 Для створення креативу потрібна оплата ${config.payment.amount} грн за 1 генерацію (2 варіанти зображень).\n\n` +
-            `⚠️ Помилка створення платежу. Спробуй ще раз або звернись до підтримки.`,
-            { reply_markup: backKeyboard }
+            `⚠️ Помилка створення платежу. Спробуй ще раз або звернись до підтримки.`
           );
           await ctx.answerCbQuery();
           return;
         }
       }
 
-      await ctx.editMessageText('Надішли фото десерту, який хочеш покращити 🍰✨', {
-        reply_markup: backKeyboard,
+      const { mainMenuReplyKeyboardMarkup } = await import('../utils/keyboards.js');
+      await ctx.reply('Надішли фото десерту, який хочеш покращити 🍰✨', {
+        reply_markup: mainMenuReplyKeyboardMarkup,
       });
       await ctx.answerCbQuery();
     } catch (error) {
@@ -491,8 +490,9 @@ export const registerCallbacks = (bot) => {
   // Меню стилів/пресетів
   bot.action('styles_menu', async (ctx) => {
     try {
-      await ctx.editMessageText('Обери категорію для натхнення 👇', {
-        reply_markup: stylesMenuKeyboard,
+      const { mainMenuReplyKeyboardMarkup } = await import('../utils/keyboards.js');
+      await ctx.reply('Обери категорію для натхнення 👇\n\nДля перегляду каталогу надішли фото десерту та обери стиль для генерації.', {
+        reply_markup: mainMenuReplyKeyboardMarkup,
       });
       await ctx.answerCbQuery();
     } catch (error) {
@@ -564,9 +564,12 @@ export const registerCallbacks = (bot) => {
         `Обери опцію:`,
         {
           parse_mode: 'HTML',
-          reply_markup: myAccountMenuKeyboard(totalAvailable),
         }
       );
+      const { mainMenuReplyKeyboardMarkup } = await import('../utils/keyboards.js');
+      await ctx.reply('Обери опцію:', {
+        reply_markup: mainMenuReplyKeyboardMarkup,
+      });
       await ctx.answerCbQuery();
     } catch (error) {
       console.error('Error handling my account menu:', error);
@@ -630,8 +633,7 @@ export const registerCallbacks = (bot) => {
         console.error('[buy_generations] Payment creation error:', paymentError);
         await ctx.editMessageText(
           `💰 Для створення креативу потрібна оплата ${config.payment.amount} грн за 1 генерацію (2 варіанти зображень).\n\n` +
-          `⚠️ Помилка створення платежу. Спробуй ще раз або звернись до підтримки.`,
-          { reply_markup: backKeyboard }
+          `⚠️ Помилка створення платежу. Спробуй ще раз або звернись до підтримки.`
         );
         await ctx.answerCbQuery();
       }
@@ -659,9 +661,12 @@ export const registerCallbacks = (bot) => {
         `Обери опцію:`,
         {
           parse_mode: 'HTML',
-          reply_markup: myAccountMenuKeyboard(totalAvailable),
         }
       );
+      const { mainMenuReplyKeyboardMarkup } = await import('../utils/keyboards.js');
+      await ctx.reply('Обери опцію:', {
+        reply_markup: mainMenuReplyKeyboardMarkup,
+      });
       await ctx.answerCbQuery();
     } catch (error) {
       console.error('Error handling settings (redirect to my_account_menu):', error);
@@ -721,24 +726,24 @@ export const registerCallbacks = (bot) => {
             // Відправляємо відео
             await ctx.replyWithVideo(creative.generated_video_url, {
               caption: caption.substring(0, 1024),
-              reply_markup: isLast ? creativeKeyboard : undefined,
+              reply_markup: isLast ? undefined : undefined,
             });
           } else if (creative.generated_image_url) {
             // Відправляємо фото
             await ctx.replyWithPhoto(creative.generated_image_url, {
               caption: caption.substring(0, 1024),
-              reply_markup: isLast ? creativeKeyboard : undefined,
+              reply_markup: isLast ? undefined : undefined,
             });
           } else {
             await ctx.reply(`📄 Креатив #${creative.id}\n${creative.caption || 'Без опису'}\n📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}`, {
-              reply_markup: isLast ? creativeKeyboard : undefined,
+              reply_markup: isLast ? undefined : undefined,
             });
           }
         } catch (error) {
           console.error(`[my_creatives] Error sending creative ${creative.id}:`, error);
           try {
             await ctx.reply(`📄 Креатив #${creative.id}\n${creative.caption || 'Без опису'}\n📅 ${new Date(creative.created_at).toLocaleDateString('uk-UA')}\n\n⚠️ Не вдалося завантажити ${contentType === 'video' ? 'відео' : 'зображення'}`, {
-              reply_markup: isLast ? creativeKeyboard : undefined,
+              reply_markup: isLast ? undefined : undefined,
             });
           } catch (e) {
             console.error(`[my_creatives] Failed to send fallback message:`, e);
