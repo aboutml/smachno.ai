@@ -8,9 +8,80 @@ import { config } from '../config.js';
  * Реєстрація обробників тексту
  */
 export const registerTextHandlers = (bot) => {
+  // Список текстів кнопок меню, які мають бути оброблені bot.hears()
+  const menuButtonTexts = [
+    '✨ Створити креатив',
+    '🍰 Каталог ідей / Стилі',
+    '👤 Мій профіль / Баланс',
+    'ℹ️ Про бота',
+    '❓ Допомога'
+  ];
+
+  // ВАЖЛИВО: bot.hears() має бути реєстрований ПЕРЕД bot.on('text')
+  // щоб мати пріоритет обробки кнопок меню
+  
+  // Обробка натискань на кнопки Reply Keyboard
+  bot.hears('✨ Створити креатив', async (ctx) => {
+    await ctx.reply('Надішли фото десерту, який хочеш покращити 🍰✨', {
+      reply_markup: mainMenuReplyKeyboardMarkup,
+    });
+  });
+
+  bot.hears('🍰 Каталог ідей / Стилі', async (ctx) => {
+    const { stylesMenuKeyboard } = await import('../utils/keyboards.js');
+    await ctx.reply('🍰 <b>Каталог ідей / Стилі</b>\n\nОбери категорію для натхнення:', {
+      parse_mode: 'HTML',
+      reply_markup: stylesMenuKeyboard,
+    });
+  });
+
+  bot.hears('👤 Мій профіль / Баланс', async (ctx) => {
+    // Викликаємо обробник my_account_menu
+    const { myAccountMenuKeyboard } = await import('../utils/keyboards.js');
+    const user = await db.getUserByTelegramId(ctx.from.id);
+    const availableGenerations = await db.getAvailablePaidGenerations(ctx.from.id);
+    const freeGenerationsUsed = user?.free_generations_used || 0;
+    const canGenerateFree = freeGenerationsUsed < config.app.freeGenerations;
+    const totalAvailable = canGenerateFree ? (config.app.freeGenerations - freeGenerationsUsed) + availableGenerations : availableGenerations;
+    
+    await ctx.reply(
+      `👤 <b>Мій профіль</b>\n\n` +
+      `💰 <b>Доступно генерацій:</b> ${totalAvailable}\n` +
+      `🎁 Безкоштовні: ${canGenerateFree ? config.app.freeGenerations - freeGenerationsUsed : 0}\n` +
+      `💳 Оплачені: ${availableGenerations}\n\n` +
+      `Обери опцію:`,
+      {
+        parse_mode: 'HTML',
+        reply_markup: myAccountMenuKeyboard(totalAvailable),
+      }
+    );
+  });
+
+  bot.hears('ℹ️ Про бота', async (ctx) => {
+    const { getAboutMessage } = await import('../utils/messages.js');
+    await ctx.reply(getAboutMessage(), {
+      parse_mode: 'HTML',
+      reply_markup: mainMenuReplyKeyboardMarkup,
+    });
+  });
+
+  bot.hears('❓ Допомога', async (ctx) => {
+    const { getHelpMessage } = await import('../utils/messages.js');
+    await ctx.reply(getHelpMessage(), {
+      parse_mode: 'HTML',
+      reply_markup: mainMenuReplyKeyboardMarkup,
+    });
+  });
+
+  // Загальний обробник тексту (реєструється після bot.hears() для менших пріоритетів)
   bot.on('text', async (ctx) => {
     // Ігноруємо команди
     if (ctx.message.text.startsWith('/')) {
+      return;
+    }
+
+    // Ігноруємо тексти кнопок меню (вони обробляються bot.hears())
+    if (menuButtonTexts.includes(ctx.message.text)) {
       return;
     }
 
@@ -105,59 +176,6 @@ export const registerTextHandlers = (bot) => {
 
     // Якщо це не побажання для стилю, просимо надіслати фото
     await ctx.reply('📸 Для генерації потрібно надіслати фото десерту.\n\nНатисни кнопку меню знизу або надішли фото напряму.', {
-      reply_markup: mainMenuReplyKeyboardMarkup,
-    });
-  });
-
-  // Обробка натискань на кнопки Reply Keyboard
-  bot.hears('✨ Створити креатив', async (ctx) => {
-    await ctx.reply('Надішли фото десерту, який хочеш покращити 🍰✨', {
-      reply_markup: mainMenuReplyKeyboardMarkup,
-    });
-  });
-
-  bot.hears('🍰 Каталог ідей / Стилі', async (ctx) => {
-    const { stylesMenuKeyboard } = await import('../utils/keyboards.js');
-    await ctx.reply('🍰 <b>Каталог ідей / Стилі</b>\n\nОбери категорію для натхнення:', {
-      parse_mode: 'HTML',
-      reply_markup: stylesMenuKeyboard,
-    });
-  });
-
-  bot.hears('👤 Мій профіль / Баланс', async (ctx) => {
-    // Викликаємо обробник my_account_menu
-    const { myAccountMenuKeyboard } = await import('../utils/keyboards.js');
-    const user = await db.getUserByTelegramId(ctx.from.id);
-    const availableGenerations = await db.getAvailablePaidGenerations(ctx.from.id);
-    const freeGenerationsUsed = user?.free_generations_used || 0;
-    const canGenerateFree = freeGenerationsUsed < config.app.freeGenerations;
-    const totalAvailable = canGenerateFree ? (config.app.freeGenerations - freeGenerationsUsed) + availableGenerations : availableGenerations;
-    
-    await ctx.reply(
-      `👤 <b>Мій профіль</b>\n\n` +
-      `💰 <b>Доступно генерацій:</b> ${totalAvailable}\n` +
-      `🎁 Безкоштовні: ${canGenerateFree ? config.app.freeGenerations - freeGenerationsUsed : 0}\n` +
-      `💳 Оплачені: ${availableGenerations}\n\n` +
-      `Обери опцію:`,
-      {
-        parse_mode: 'HTML',
-        reply_markup: myAccountMenuKeyboard(totalAvailable),
-      }
-    );
-  });
-
-  bot.hears('ℹ️ Про бота', async (ctx) => {
-    const { getAboutMessage } = await import('../utils/messages.js');
-    await ctx.reply(getAboutMessage(), {
-      parse_mode: 'HTML',
-      reply_markup: mainMenuReplyKeyboardMarkup,
-    });
-  });
-
-  bot.hears('❓ Допомога', async (ctx) => {
-    const { getHelpMessage } = await import('../utils/messages.js');
-    await ctx.reply(getHelpMessage(), {
-      parse_mode: 'HTML',
       reply_markup: mainMenuReplyKeyboardMarkup,
     });
   });
