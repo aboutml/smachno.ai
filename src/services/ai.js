@@ -158,7 +158,7 @@ export class AIService {
 
           // Вказуємо, що ми хочемо отримати зображення
           const response = await geminiClient.models.generateContent({
-            model: 'gemini-2.5-flash-image',
+            model: 'gemini-3-pro-image-preview',
             contents: contents,
             config: {
               responseModalities: ['IMAGE'], // Явно вказуємо, що хочемо зображення
