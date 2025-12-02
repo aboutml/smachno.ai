@@ -52,6 +52,46 @@ export const registerTextHandlers = (bot) => {
   
   // Обробка натискань на кнопки Reply Keyboard
   bot.hears('✨ Створити креатив', async (ctx) => {
+    // Перевіряємо оплату перед початком генерації
+    const user = await db.getUserByTelegramId(ctx.from.id);
+    const freeGenerationsUsed = user?.free_generations_used || 0;
+    const canGenerateFree = freeGenerationsUsed < config.app.freeGenerations;
+    const availablePaidGenerations = await db.getAvailablePaidGenerations(ctx.from.id);
+
+    console.log(`[start_generation] User ${ctx.from.id}, free generations used: ${freeGenerationsUsed}/${config.app.freeGenerations}, can generate free: ${canGenerateFree}, available paid: ${availablePaidGenerations}`);
+
+    if (!canGenerateFree && availablePaidGenerations === 0) {
+      try {
+        const { paymentService } = await import('../services/payment.js');
+        const { createPaymentKeyboard } = await import('../utils/keyboards.js');
+        const payment = await paymentService.createPayment(ctx.from.id);
+        const userData = await db.createOrUpdateUser(ctx.from.id, {
+          username: ctx.from.username,
+          first_name: ctx.from.first_name,
+        });
+        await db.createPayment(userData.id, payment.amount * 100, config.payment.currency, payment.orderId);
+        
+        await ctx.reply(
+          `💰 Для створення креативу потрібна оплата ${payment.amount} грн за 1 генерацію (2 варіанти зображень).\n\n` +
+          `Натисни кнопку нижче для оплати:`,
+          createPaymentKeyboard(payment.checkoutUrl)
+        );
+        await ctx.reply('Або повернись до головного меню:', {
+          reply_markup: mainMenuReplyKeyboardMarkup,
+        });
+        return;
+      } catch (paymentError) {
+        console.error('[start_generation] Payment creation error:', paymentError);
+        await ctx.reply(
+          `💰 Для створення креативу потрібна оплата ${config.payment.amount} грн за 1 генерацію (2 варіанти зображень).\n\n` +
+          `⚠️ Помилка створення платежу. Спробуй ще раз або звернись до підтримки.`,
+          { reply_markup: mainMenuReplyKeyboardMarkup }
+        );
+        return;
+      }
+    }
+
+    // Якщо оплата є або є безкоштовні генерації - продовжуємо
     await ctx.reply('Надішли фото десерту, який хочеш покращити 🍰✨', {
       reply_markup: mainMenuReplyKeyboardMarkup,
     });
