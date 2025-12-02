@@ -388,35 +388,6 @@ export const registerCallbacks = (bot) => {
     }
   });
 
-  // Категорії стилів/пресетів
-  bot.action(/^style_(cakes|cupcakes|donuts|drinks|cookies|desserts)$/, async (ctx) => {
-    try {
-      const category = ctx.match[1];
-      const categoryNames = {
-        cakes: 'Торти',
-        cupcakes: 'Капкейки',
-        donuts: 'Пончики',
-        drinks: 'Напої',
-        cookies: 'Печиво',
-        desserts: 'Десерти'
-      };
-      
-      await ctx.editMessageText(
-        `🍰 Приклади ${categoryNames[category]} для натхнення:\n\n` +
-        `(Тут будуть показані приклади AI-фото)\n\n` +
-        `Це лише для натхнення. Для генерації своїх фото надішли фото десерту та обери стиль.`
-      );
-      const { mainMenuReplyKeyboardMarkup } = await import('../utils/keyboards.js');
-      await ctx.reply('Обери опцію:', {
-        reply_markup: mainMenuReplyKeyboardMarkup,
-      });
-      await ctx.answerCbQuery();
-    } catch (error) {
-      console.error('Error handling style category:', error);
-      await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
-    }
-  });
-
   // Старт генерації (основний обробник)
   bot.action('start_generation', async (ctx) => {
     try {
@@ -483,20 +454,6 @@ export const registerCallbacks = (bot) => {
       await ctx.answerCbQuery();
     } catch (error) {
       console.error('Error handling generate photo:', error);
-      await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
-    }
-  });
-
-  // Меню стилів/пресетів
-  bot.action('styles_menu', async (ctx) => {
-    try {
-      const { mainMenuReplyKeyboardMarkup } = await import('../utils/keyboards.js');
-      await ctx.reply('Обери категорію для натхнення 👇\n\nДля перегляду каталогу надішли фото десерту та обери стиль для генерації.', {
-        reply_markup: mainMenuReplyKeyboardMarkup,
-      });
-      await ctx.answerCbQuery();
-    } catch (error) {
-      console.error('Error handling styles menu:', error);
       await ctx.answerCbQuery('Помилка. Спробуй ще раз.');
     }
   });

@@ -6,7 +6,6 @@ import { Markup } from 'telegraf';
 export const mainMenuKeyboard = {
   inline_keyboard: [
     [{ text: '✨ Створити креатив', callback_data: 'start_generation' }],
-    [{ text: '🍰 Каталог ідей / Стилі', callback_data: 'styles_menu' }],
     [{ text: '👤 Мій профіль / Баланс', callback_data: 'my_account_menu' }],
     [{ text: 'ℹ️ Про бота', callback_data: 'about' }, { text: '❓ Допомога', callback_data: 'help' }]
   ],
@@ -17,7 +16,7 @@ export const mainMenuKeyboard = {
  */
 const mainMenuReplyKeyboardObj = Markup.keyboard([
   ['✨ Створити креатив'],
-  ['🍰 Каталог ідей / Стилі', '👤 Мій профіль / Баланс'],
+  ['👤 Мій профіль / Баланс'],
   ['ℹ️ Про бота', '❓ Допомога']
 ]).resize().persistent(); // resize() робить кнопки компактнішими, persistent() робить клавіатуру постійною
 
@@ -94,29 +93,6 @@ export const createPaymentKeyboard = (checkoutUrl) => {
  */
 export const backKeyboard = {
   inline_keyboard: [
-    [{ text: '🔙 Назад', callback_data: 'back_to_menu' }]
-  ],
-};
-
-/**
- * Клавіатура стилів/пресетів (оптимізована - кнопка генерації на початку)
- */
-export const stylesMenuKeyboard = {
-  inline_keyboard: [
-    [{ text: '📸 Хочу згенерувати своє фото', callback_data: 'start_generation' }],
-    [{ text: '🍰 Торти', callback_data: 'category_cakes' }, { text: '🧁 Капкейки', callback_data: 'category_cupcakes' }],
-    [{ text: '🍩 Пончики', callback_data: 'category_donuts' }, { text: '☕ Напої', callback_data: 'category_drinks' }],
-    [{ text: '🍪 Печиво', callback_data: 'category_cookies' }, { text: '🍮 Інші десерти', callback_data: 'category_desserts' }],
-    [{ text: '🔙 Головне меню', callback_data: 'back_to_menu' }]
-  ],
-};
-
-/**
- * Клавіатура для категорії стилю
- */
-export const categoryKeyboard = {
-  inline_keyboard: [
-    [{ text: '📸 Хочу згенерувати своє фото', callback_data: 'generate_own' }],
     [{ text: '🔙 Назад', callback_data: 'back_to_menu' }]
   ],
 };
