@@ -4,7 +4,7 @@ import { aiService } from '../services/ai.js';
 import { paymentService } from '../services/payment.js';
 import { storageService } from '../services/storage.js';
 import { Markup } from 'telegraf';
-import { postGenerationKeyboard, createPaymentKeyboard } from '../utils/keyboards.js';
+import { createPaymentKeyboard } from '../utils/keyboards.js';
 import { deleteSession, getSession, setSession } from '../utils/sessions.js';
 
 /**
